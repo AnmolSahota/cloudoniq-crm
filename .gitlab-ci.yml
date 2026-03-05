@@ -16,17 +16,19 @@ build_image:
   tags:
     - realty
   script:
-    - echo "🔹 Logging into GitLab Registry..."
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  - echo "🔹 Logging into GitLab Registry..."
+  - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
 
-    - echo "🔹 Building Docker image..."
-    - docker build \
-        --build-arg REACT_APP_SITE_BASE_URL=$REACT_APP_API_BASE_URL \
-        --build-arg REACT_APP_API_BASE_URL=$REACT_APP_FASTAPI_URL \
-        -t $CI_REGISTRY_IMAGE:latest .
+  - echo "🔹 Building Docker image..."
+  - |
+    docker build \
+      --build-arg REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL \
+      --build-arg REACT_APP_FASTAPI_URL=$REACT_APP_FASTAPI_URL \
+      --build-arg REACT_APP_NODE_ENV=$REACT_APP_NODE_ENV \
+      -t $CI_REGISTRY_IMAGE:latest .
 
-    - echo "🔹 Pushing image..."
-    - docker push $CI_REGISTRY_IMAGE:latest
+  - echo "🔹 Pushing image..."
+  - docker push $CI_REGISTRY_IMAGE:latest
 
   only:
     - master
