@@ -24,7 +24,6 @@ build_image:
     docker build \
       --build-arg REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL \
       --build-arg REACT_APP_FASTAPI_URL=$REACT_APP_FASTAPI_URL \
-      --build-arg REACT_APP_NODE_ENV=$REACT_APP_NODE_ENV \
       -t $CI_REGISTRY_IMAGE:latest .
 
   - echo "🔹 Pushing image..."
@@ -60,6 +59,7 @@ deploy_to_ec2:
       docker rm realty-fe 2>/dev/null || true
 
       docker run -d --name realty-fe -p 3040:80 \
+        --add-host=host.docker.internal:host-gateway \
         --restart unless-stopped \
         $CI_REGISTRY_IMAGE:latest
 
