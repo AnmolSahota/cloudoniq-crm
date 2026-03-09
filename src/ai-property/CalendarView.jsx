@@ -17,8 +17,17 @@ import {
 import { PageHeader } from "./SharedComponents";
 import { BASE_URL } from "./config";
 
-const getDealerId = () =>
-  JSON.parse(localStorage.getItem("auth_user"))?.id || "";
+/* ─── AUTH HELPERS ─────────────────────────────────────────────────────────── */
+const getAuthUser = () => JSON.parse(localStorage.getItem("auth_user")) || {};
+
+// DEALER      → their own id IS the dealer_id
+// DEALER_USER → belongs to a dealer, use dealer_id field
+const getDealerId = () => {
+  const authUser = getAuthUser();
+  return authUser.role === "DEALER_USER"
+    ? authUser.dealer_id || ""
+    : authUser.id || "";
+};
 
 const MONTHS = [
   "January",
@@ -81,13 +90,11 @@ const getPropertyLocation = (item) =>
 /* ─── STATUS PILL ─────────────────────────────────────────────────────────── */
 const StatusPills = ({ event }) => (
   <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-    {/* visit status OR task type */}
     {event.status && (
       <span className="text-[10px] font-semibold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
         {event.status}
       </span>
     )}
-    {/* task done/pending — only for tasks */}
     {event.type === "task" && (
       <span
         className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
@@ -126,7 +133,6 @@ const DayDetail = ({ dateKey, events, onClose }) => {
           const Icon = s.icon;
           return (
             <div key={i} className="px-3 py-2.5 hover:bg-gray-50 transition">
-              {/* type badge row */}
               <div className="flex items-center gap-1.5 mb-1">
                 <span
                   className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${s.badge}`}
@@ -134,52 +140,36 @@ const DayDetail = ({ dateKey, events, onClose }) => {
                   {s.label}
                 </span>
               </div>
-
-              {/* lead name */}
               <div className="font-semibold text-sm text-gray-800 truncate">
                 {e.leadName}
               </div>
-
-              {/* phone */}
               {e.leadPhone && (
                 <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
                   <Phone size={10} className="shrink-0" /> {e.leadPhone}
                 </div>
               )}
-
-              {/* status pills — visit status OR task type + done */}
               <StatusPills event={e} />
-
-              {/* assigned (tasks) */}
               {e.meta && (
                 <div className="text-xs text-gray-400 mt-0.5">{e.meta}</div>
               )}
-
-              {/* property name for visits */}
               {e.propertyName && (
                 <div className="text-xs text-gray-500 truncate flex items-center gap-1 mt-1">
                   <Building2 size={10} className="shrink-0 text-blue-400" />
                   {e.propertyName}
                 </div>
               )}
-
-              {/* property location */}
               {e.propertyLocation && (
                 <div className="text-xs text-gray-400 truncate flex items-center gap-1 mt-0.5">
                   <MapPin size={10} className="shrink-0" />
                   {e.propertyLocation}
                 </div>
               )}
-
-              {/* note for tasks */}
               {e.note && (
                 <div className="text-xs text-gray-400 truncate flex items-center gap-1 mt-1">
                   <Icon size={10} className="shrink-0" />
                   {e.note}
                 </div>
               )}
-
-              {/* time */}
               {e.time && (
                 <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
                   <Clock size={10} /> {e.time}
@@ -211,24 +201,31 @@ const CalendarView = () => {
       setLoading(true);
       setError("");
       try {
+        const authUser = getAuthUser();
+        const isDealer_User = authUser.role === "DEALER_USER";
+
+        // ✅ Role-aware params:
+        // DEALER      → filter by dealer_id only (sees all)
+        // DEALER_USER → filter by dealer_id + assigned_to (sees only theirs)
+        const visitParams = { dealer_id: getDealerId() };
+        const taskParams = { dealer_id: getDealerId() };
+
+        if (isDealer_User) {
+          visitParams.assigned_to = authUser.id;
+          taskParams.assigned_to = authUser.id;
+        }
+
         const [vRes, tRes] = await Promise.all([
-          axios.get(`${BASE_URL}/admin/visits`, {
-            params: { dealer_id: getDealerId() },
-          }),
-          axios.get(`${BASE_URL}/tasks/`, {
-            params: { dealer_id: getDealerId() },
-          }),
+          axios.get(`${BASE_URL}/admin/visits`, { params: visitParams }),
+          axios.get(`${BASE_URL}/tasks/`, { params: taskParams }),
         ]);
 
-        // Normalize visits - keep original data, we'll use helpers for extraction
         setVisits(
           (vRes.data.data || []).map((v) => ({
             ...v,
             id: v.booking_id || v.id,
           })),
         );
-
-        // Normalize tasks
         setTasks(tRes.data.data || []);
       } catch (err) {
         console.error("Calendar fetch error:", err);
@@ -262,7 +259,6 @@ const CalendarView = () => {
     eventMap[key].push(entry);
   };
 
-  // Map visits to calendar events
   visits.forEach((v) =>
     add(v.date, {
       type: "visit",
@@ -272,24 +268,23 @@ const CalendarView = () => {
       propertyLocation: getPropertyLocation(v),
       note: null,
       time: v.time,
-      status: v.status, // Scheduled / Completed / Cancelled …
-      taskDone: null, // not applicable
+      status: v.status,
+      taskDone: null,
       meta: v.assigned_name ? `Assigned to ${v.assigned_name}` : null,
     }),
   );
 
-  // Map tasks to calendar events
   tasks.forEach((t) =>
     add(t.date, {
       type: "task",
       leadName: getLeadName(t),
       leadPhone: getLeadPhone(t),
-      propertyName: getPropertyName(t), // Show property context for tasks too
+      propertyName: getPropertyName(t),
       propertyLocation: null,
       note: t.note || null,
       time: t.time ?? null,
-      status: t.type, // Meeting / Call / Follow-up …
-      taskDone: t.done, // true → Completed pill, false → Pending pill
+      status: t.type,
+      taskDone: t.done,
       meta: t.assigned_name ? `Assigned to ${t.assigned_name}` : null,
     }),
   );
@@ -513,25 +508,19 @@ const CalendarView = () => {
                         {s.label}
                       </span>
                     </div>
-
                     {e.leadPhone && (
                       <div className="text-xs text-gray-400 ml-4 flex items-center gap-1">
                         <Phone size={10} className="shrink-0" /> {e.leadPhone}
                       </div>
                     )}
-
-                    {/* status pills — reuse same component */}
                     <div className="ml-4">
                       <StatusPills event={e} />
                     </div>
-
                     {e.meta && (
                       <div className="text-xs text-gray-400 ml-4 mt-0.5">
                         {e.meta}
                       </div>
                     )}
-
-                    {/* Property name */}
                     {e.propertyName && (
                       <div className="text-xs text-gray-500 ml-4 mt-0.5 truncate flex items-center gap-1">
                         <Building2
@@ -541,22 +530,17 @@ const CalendarView = () => {
                         {e.propertyName}
                       </div>
                     )}
-
-                    {/* Property location */}
                     {e.propertyLocation && (
                       <div className="text-xs text-gray-400 ml-4 mt-0.5 truncate flex items-center gap-1">
                         <MapPin size={10} className="shrink-0" />
                         {e.propertyLocation}
                       </div>
                     )}
-
-                    {/* Note for tasks */}
                     {e.note && (
                       <div className="text-xs text-gray-400 ml-4 mt-0.5 truncate flex items-center gap-1">
                         <Icon size={10} className="shrink-0" /> {e.note}
                       </div>
                     )}
-
                     <div className="text-xs text-gray-400 mt-1 ml-4 flex items-center gap-1">
                       <Clock size={10} /> {e.date}
                       {e.time ? ` · ${e.time}` : ""}

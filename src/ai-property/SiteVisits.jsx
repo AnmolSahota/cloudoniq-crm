@@ -22,8 +22,19 @@ import {
 } from "lucide-react";
 import { BASE_URL } from "./config";
 
-const getDealerId = () =>
-  JSON.parse(localStorage.getItem("auth_user"))?.id || "";
+/* ─── AUTH HELPERS ───────────────────────────────────────────────────────── */
+const getAuthUser = () => JSON.parse(localStorage.getItem("auth_user")) || {};
+
+// DEALER      → their own id IS the dealer_id
+// DEALER_USER → belongs to a dealer, use dealer_id field
+const getDealerId = () => {
+  const authUser = getAuthUser();
+  return authUser.role === "DEALER_USER"
+    ? authUser.dealer_id || ""
+    : authUser.id || "";
+};
+
+const isDealerUser = () => getAuthUser().role === "DEALER_USER";
 
 /* ─── CONSTANTS ──────────────────────────────────────────────────────────── */
 const VISIT_STATUSES = [
@@ -81,7 +92,6 @@ const initials = (name) =>
     .toUpperCase() || "?";
 
 // ── Helpers: read enriched contact data from visit ───────────────────────────
-// Priority: nested lead object → direct fields → fallback
 const getVisitName = (v) =>
   v.lead?.contact_name || v.contact_name || v.lead_name || v.name || "—";
 
@@ -124,7 +134,6 @@ const SearchableDropdown = ({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const ref = useRef();
-
   useEffect(() => {
     const h = (e) => {
       if (!ref.current?.contains(e.target)) setOpen(false);
@@ -222,12 +231,14 @@ const SearchableDropdown = ({
 
 /* ─── EDIT VISIT PANEL ───────────────────────────────────────────────────── */
 const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
+  const authUser = getAuthUser();
+  const isDealer_User = authUser.role === "DEALER_USER";
+
   const [properties, setProperties] = useState([]);
   const [propsLoading, setPropsLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Build lead option from enriched visit data
   const buildLeadOption = () => {
     const fromList = leads.find((l) => l.id === visit.lead_id);
     if (fromList)
@@ -238,7 +249,6 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
         stage: fromList.stage,
         property_name: fromList.property_name || null,
       };
-    // Fallback: use nested lead object or direct fields
     return {
       id: visit.lead_id,
       name: getVisitName(visit),
@@ -269,6 +279,7 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
   useEffect(() => {
     const load = async () => {
       try {
+        // ✅ Always use getDealerId() — returns dealer's ID for both roles
         const res = await axios.get(`${BASE_URL}/properties/list`, {
           params: { dealer_id: getDealerId() },
         });
@@ -300,7 +311,7 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
     setLoading(true);
     try {
       const payload = {
-        dealer_id: getDealerId(),
+        dealer_id: getDealerId(), // ✅ correct dealer_id for both roles
         lead_id: form.lead.id,
         property_id: form.property?.id || null,
         property_name: form.property?.name || null,
@@ -308,8 +319,13 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
         time: form.time,
         notes: form.notes,
         status: form.status,
-        assigned_to: form.assignedTo?.id || null,
-        assigned_name: form.assignedTo?.name || null,
+        // ✅ DEALER_USER cannot change assigned_to — keep original
+        assigned_to: isDealer_User
+          ? visit.assigned_to
+          : form.assignedTo?.id || null,
+        assigned_name: isDealer_User
+          ? visit.assigned_name
+          : form.assignedTo?.name || null,
       };
       const res = await axios.patch(
         `${BASE_URL}/admin/visits/${visit.id}`,
@@ -524,43 +540,46 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
             </div>
           </div>
 
-          {/* Assign salesperson */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-              Assigned Sales Person
-            </label>
-            <SearchableDropdown
-              label="Sales person"
-              placeholder="Assign to a sales person..."
-              items={users.filter((u) => u.is_active)}
-              value={form.assignedTo}
-              onChange={(v) => set("assignedTo", v)}
-              icon={User}
-              renderSelected={(item) => (
-                <span className="font-semibold text-gray-800">
-                  {item.name}
-                  <span className="font-normal text-gray-400 ml-1">
-                    · {item.phone}
+          {/* ✅ Assign salesperson — hidden for DEALER_USER */}
+          {!isDealer_User && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                Assigned Sales Person
+              </label>
+              <SearchableDropdown
+                label="Sales person"
+                placeholder="Assign to a sales person..."
+                // ✅ Fetch users scoped to dealer — getDealerId() handles both roles
+                items={users.filter((u) => u.is_active)}
+                value={form.assignedTo}
+                onChange={(v) => set("assignedTo", v)}
+                icon={User}
+                renderSelected={(item) => (
+                  <span className="font-semibold text-gray-800">
+                    {item.name}
+                    <span className="font-normal text-gray-400 ml-1">
+                      · {item.phone}
+                    </span>
                   </span>
-                </span>
-              )}
-              renderItem={(item, active) => (
-                <div
-                  className={`flex items-center gap-3 px-3 py-2.5 ${active ? "bg-indigo-50" : ""}`}
-                >
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-xs font-black shrink-0">
-                    {initials(item.name)}
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-sm font-semibold text-gray-800">
-                      {item.name}
+                )}
+                renderItem={(item, active) => (
+                  <div
+                    className={`flex items-center gap-3 px-3 py-2.5 ${active ? "bg-indigo-50" : ""}`}
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-xs font-black shrink-0">
+                      {initials(item.name)}
                     </div>
-                    <div className="text-xs text-gray-400">{item.phone}</div>
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold text-gray-800">
+                        {item.name}
+                      </div>
+                      <div className="text-xs text-gray-400">{item.phone}</div>
+                    </div>
                   </div>
-                </div>
-              )}
-            />
-          </div>
+                )}
+              />
+            </div>
+          )}
 
           {/* Notes */}
           <div>
@@ -615,12 +634,24 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
 
 /* ─── NEW VISIT PANEL ────────────────────────────────────────────────────── */
 const VisitPanel = ({ onClose, onSave, leads, users }) => {
-  const STEPS = [
-    { num: 1, label: "Lead" },
-    { num: 2, label: "Property" },
-    { num: 3, label: "Schedule" },
-    { num: 4, label: "Assign" },
-  ];
+  const authUser = getAuthUser();
+  const isDealer_User = authUser.role === "DEALER_USER";
+
+  // ✅ DEALER_USER skips the Assign step entirely
+  const STEPS = isDealer_User
+    ? [
+        { num: 1, label: "Lead" },
+        { num: 2, label: "Property" },
+        { num: 3, label: "Schedule" },
+      ]
+    : [
+        { num: 1, label: "Lead" },
+        { num: 2, label: "Property" },
+        { num: 3, label: "Schedule" },
+        { num: 4, label: "Assign" },
+      ];
+
+  const MAX_STEP = isDealer_User ? 3 : 4;
 
   const [step, setStep] = useState(1);
   const [properties, setProperties] = useState([]);
@@ -637,7 +668,6 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
   const [loading, setLoading] = useState(false);
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
-  // Map enriched leads to dropdown items
   const leadItems = leads.map((l) => ({
     id: l.id,
     name: l.contact_name || "—",
@@ -650,6 +680,7 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
     const load = async () => {
       setPropsLoading(true);
       try {
+        // ✅ getDealerId() now returns the correct dealer ID for both roles
         const res = await axios.get(`${BASE_URL}/properties/list`, {
           params: { dealer_id: getDealerId() },
         });
@@ -688,15 +719,18 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
     setLoading(true);
     try {
       const payload = {
-        dealer_id: getDealerId(),
+        dealer_id: getDealerId(), // ✅ correct dealer_id for both roles
         lead_id: form.lead.id,
         property_id: form.property.id,
         property_name: form.property.name,
         date: form.date,
         time: form.time,
         notes: form.notes,
-        assigned_to: form.assignedTo?.id || null,
-        assigned_name: form.assignedTo?.name || null,
+        // ✅ DEALER_USER auto-assigns to themselves
+        assigned_to: isDealer_User ? authUser.id : form.assignedTo?.id || null,
+        assigned_name: isDealer_User
+          ? authUser.name
+          : form.assignedTo?.name || null,
         status: "Scheduled",
       };
       const res = await axios.post(`${BASE_URL}/admin/visits`, payload);
@@ -1004,8 +1038,8 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
             </div>
           )}
 
-          {/* STEP 4 — Assign & Review */}
-          {step === 4 && (
+          {/* STEP 4 — Assign & Review — ✅ hidden for DEALER_USER */}
+          {step === 4 && !isDealer_User && (
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">
@@ -1015,7 +1049,8 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
                 <SearchableDropdown
                   label="Sales person"
                   placeholder="Assign to a sales person..."
-                  items={users.filter((u) => u.status === "ACTIVE")}
+                  // ✅ users already fetched with correct dealer_id from main component
+                  items={users.filter((u) => u.is_active)}
                   value={form.assignedTo}
                   onChange={(v) => set("assignedTo", v)}
                   icon={User}
@@ -1113,7 +1148,8 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
           >
             {step > 1 ? "← Back" : "Cancel"}
           </button>
-          {step < 4 ? (
+          {/* ✅ Use MAX_STEP to control when Continue vs Schedule Visit shows */}
+          {step < MAX_STEP ? (
             <button
               type="button"
               onClick={() => canProceed() && setStep((s) => s + 1)}
@@ -1254,11 +1290,19 @@ const SiteVisits = () => {
     );
 
   useEffect(() => {
+    const authUser = getAuthUser();
+
     const fetchVisits = async () => {
       try {
-        const res = await axios.get(`${BASE_URL}/admin/visits`, {
-          params: { dealer_id: getDealerId() },
-        });
+        const params = {};
+        if (authUser.role === "DEALER") {
+          // DEALER sees all visits under their dealer_id
+          params.dealer_id = getDealerId();
+        } else if (authUser.role === "DEALER_USER") {
+          // DEALER_USER only sees visits assigned to them
+          params.assigned_to = authUser.id;
+        }
+        const res = await axios.get(`${BASE_URL}/admin/visits`, { params });
         const data = (res.data.data || []).map((v) => ({
           ...v,
           id: v.booking_id || v.id,
@@ -1268,22 +1312,27 @@ const SiteVisits = () => {
         console.error("Failed to fetch visits:", err);
       }
     };
+
     const fetchLeads = async () => {
       try {
+        // ✅ getDealerId() returns correct dealer ID for both roles
         const res = await axios.get(`${BASE_URL}/leads/`, {
           params: { dealer_id: getDealerId() },
         });
         setLeads(res.data.data || []);
       } catch {}
     };
+
     const fetchUsers = async () => {
       try {
+        // ✅ getDealerId() returns correct dealer ID for both roles
         const res = await axios.get(`${BASE_URL}/auth/dealer-users`, {
           params: { dealer_id: getDealerId() },
         });
         setUsers(res.data.data || []);
       } catch {}
     };
+
     Promise.all([fetchVisits(), fetchLeads(), fetchUsers()]).finally(() =>
       setLoading(false),
     );
@@ -1298,7 +1347,13 @@ const SiteVisits = () => {
   VISIT_STATUSES.forEach((s) => {
     counts[s] = visits.filter((v) => v.status === s).length;
   });
-  const unassignedCount = visits.filter((v) => !v.assigned_name).length;
+
+  // ✅ Only show unassigned warning for DEALER role
+  const authUser = getAuthUser();
+  const unassignedCount =
+    authUser.role === "DEALER"
+      ? visits.filter((v) => !v.assigned_name).length
+      : 0;
 
   return (
     <div className="p-6 space-y-5">
@@ -1320,7 +1375,7 @@ const SiteVisits = () => {
         </button>
       </div>
 
-      {/* Unassigned warning */}
+      {/* Unassigned warning — only visible to DEALER */}
       {unassignedCount > 0 && (
         <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
           <AlertTriangle size={17} className="text-amber-500 shrink-0" />

@@ -1,4 +1,4 @@
-// src/pages/MainApp.jsx
+// src/pages/Dashboard.jsx
 
 import {
   Activity,
@@ -43,6 +43,7 @@ import FeatureAccess from "./FeatureAccess";
 import LeadsVisits from "./LeadsVisits";
 import ManageDealers from "./ManageDealers";
 import TopDealers from "./TopDealers";
+import DealerUserDashboard from "./DealerUserDashboard";
 
 /* ── Nav Config ─────────────────────────────────────────────────────────────── */
 const NAV_CONFIG = {
@@ -187,6 +188,50 @@ const NAV_CONFIG = {
       component: <ManageSalesTeam />,
     },
   ],
+
+  // ── Dealer User (sales team member) ────────────────────────────────────────
+  DEALER_USER: [
+    {
+      id: "dashboard",
+      label: "Dashboard",
+      icon: LayoutDashboard,
+      color: "from-indigo-600 to-violet-600",
+      description: "Your CRM overview",
+      component: <DealerUserDashboard />, // 👈 changed
+    },
+    {
+      id: "site-visits",
+      label: "Site Visits",
+      icon: Home,
+      color: "from-teal-500 to-cyan-600",
+      description: "Manage property visits",
+      component: <SiteVisits />,
+    },
+    {
+      id: "tasks",
+      label: "Tasks & Follow-ups",
+      icon: Activity,
+      color: "from-amber-500 to-orange-500",
+      description: "Pending follow-ups",
+      component: <TaskFollowUp />,
+    },
+    {
+      id: "leads",
+      label: "Lead Management",
+      icon: Users,
+      color: "from-blue-600 to-indigo-600",
+      description: "Track & convert leads",
+      component: <LeadManagement />,
+    },
+    {
+      id: "calendar",
+      label: "Calendar",
+      icon: Calendar,
+      color: "from-purple-600 to-pink-600",
+      description: "Visit & follow-up calendar",
+      component: <CalendarView />,
+    },
+  ],
 };
 
 const ROLE_BRAND = {
@@ -198,6 +243,17 @@ const ROLE_BRAND = {
     label: "Dealer",
     gradient: "from-blue-600 to-indigo-600",
   },
+  DEALER_USER: {
+    label: "User",
+    gradient: "from-teal-500 to-cyan-600",
+  },
+};
+
+/* ── Helper: avatar initials ─────────────────────────────────────────────── */
+const getAvatarInitials = (role) => {
+  if (role === "SUPER_ADMIN") return "SA";
+  if (role === "DEALER_USER") return "U";
+  return "D";
 };
 
 /* ── Dashboard ────────────────────────────────────────────────────────────── */
@@ -382,7 +438,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-2 shrink-0">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center text-white font-bold text-xs shadow-sm shrink-0">
-                {role === "SUPER_ADMIN" ? "SA" : "D"}
+                {getAvatarInitials(role)}
               </div>
             </div>
           </div>

@@ -21,8 +21,17 @@ import {
 } from "lucide-react";
 import { BASE_URL } from "./config";
 
-const getDealerId = () =>
-  JSON.parse(localStorage.getItem("auth_user"))?.id || "";
+/* ─── AUTH HELPERS ─────────────────────────────────────────────────────────── */
+const getAuthUser = () => JSON.parse(localStorage.getItem("auth_user")) || {};
+
+// DEALER      → their own id IS the dealer_id
+// DEALER_USER → belongs to a dealer, use dealer_id field
+const getDealerId = () => {
+  const authUser = getAuthUser();
+  return authUser.role === "DEALER_USER"
+    ? authUser.dealer_id || ""
+    : authUser.id || "";
+};
 
 /* ─── CONSTANTS ────────────────────────────────────────────────────────────── */
 const TYPE_CONFIG = {
@@ -78,7 +87,6 @@ const initials = (name) =>
     .slice(0, 2)
     .toUpperCase() || "?";
 
-// ── Helper: get lead display name from enriched task ─────────────────────────
 const getLeadName = (task) => task.lead?.contact_name || "—";
 const getLeadPhone = (task) => task.lead?.contact_phone || "—";
 const getLeadProp = (task) => task.lead?.property_name || null;
@@ -240,9 +248,10 @@ const DeleteConfirmModal = ({ task, onConfirm, onCancel, loading }) => (
 
 /* ─── TASK PANEL ───────────────────────────────────────────────────────────── */
 const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
+  const authUser = getAuthUser();
+  const isDealer_User = authUser.role === "DEALER_USER";
   const isEdit = Boolean(editTask);
 
-  // Build lead option from enriched task.lead when editing
   const buildLeadOption = (task) => {
     if (!task?.lead_id) return null;
     return {
@@ -253,6 +262,22 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
       property_name: getLeadProp(task),
     };
   };
+
+  // ✅ DEALER_USER skips the Assign step
+  const STEPS = isDealer_User
+    ? [
+        { num: 1, label: "Type" },
+        { num: 2, label: "Lead" },
+        { num: 3, label: "Schedule" },
+      ]
+    : [
+        { num: 1, label: "Type" },
+        { num: 2, label: "Lead" },
+        { num: 3, label: "Schedule" },
+        { num: 4, label: "Assign" },
+      ];
+
+  const MAX_STEP = isDealer_User ? 3 : 4;
 
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(
@@ -272,8 +297,6 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
   const [loading, setLoading] = useState(false);
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
-  // ── Map leads from API response to dropdown items ──────────────────────────
-  // leads come from GET /leads/ — enriched with contact_name, contact_phone etc.
   const leadItems = leads.map((l) => ({
     id: l.id,
     name: l.contact_name || "—",
@@ -281,13 +304,6 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
     stage: l.stage,
     property_name: l.property_name || null,
   }));
-
-  const STEPS = [
-    { num: 1, label: "Type" },
-    { num: 2, label: "Lead" },
-    { num: 3, label: "Schedule" },
-    { num: 4, label: "Assign" },
-  ];
 
   const canProceed = () => {
     if (step === 1) return !!form.type;
@@ -310,15 +326,23 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
 
     setLoading(true);
     try {
-      // Only send lead_id — backend fetches name/phone from contact
       const payload = {
-        dealer_id: getDealerId(),
+        dealer_id: getDealerId(), // ✅ correct dealer_id for both roles
         lead_id: form.lead.id,
         type: form.type,
         date: form.date,
         note: form.note,
-        assigned_to: form.assignedTo?.id || null,
-        assigned_name: form.assignedTo?.name || null,
+        // ✅ DEALER_USER auto-assigns to themselves; on edit keep original
+        assigned_to: isDealer_User
+          ? isEdit
+            ? editTask.assigned_to
+            : authUser.id
+          : form.assignedTo?.id || null,
+        assigned_name: isDealer_User
+          ? isEdit
+            ? editTask.assigned_name
+            : authUser.name
+          : form.assignedTo?.name || null,
         done: editTask?.done || false,
       };
 
@@ -613,8 +637,8 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
             </>
           )}
 
-          {/* STEP 4 — Assign & Summary */}
-          {step === 4 && (
+          {/* STEP 4 — Assign & Summary — ✅ hidden for DEALER_USER */}
+          {step === 4 && !isDealer_User && (
             <>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">
@@ -624,7 +648,8 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
                 <SearchableDropdown
                   label="Team member"
                   placeholder="Assign to a team member..."
-                  items={users}
+                  // ✅ users already fetched with correct dealer_id
+                  items={users.filter((u) => u.is_active)}
                   value={form.assignedTo}
                   onChange={(v) => set("assignedTo", v)}
                   icon={Users}
@@ -653,11 +678,6 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
                           {item.phone}
                         </div>
                       </div>
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${item.status === "ACTIVE" ? "bg-emerald-50 text-emerald-600" : "bg-gray-100 text-gray-400"}`}
-                      >
-                        {item.status}
-                      </span>
                     </div>
                   )}
                 />
@@ -727,7 +747,8 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
           >
             {step > 1 ? "← Back" : "Cancel"}
           </button>
-          {step < 4 ? (
+          {/* ✅ Use MAX_STEP to control Continue vs Submit */}
+          {step < MAX_STEP ? (
             <button
               type="button"
               onClick={() => canProceed() && setStep((s) => s + 1)}
@@ -815,7 +836,6 @@ const TaskCard = ({ task, onToggle, onEdit, onDelete }) => {
             )}
           </div>
 
-          {/* Phone + property as subtitle */}
           <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
             {leadPhone !== "—" && (
               <span className="flex items-center gap-1">
@@ -876,7 +896,6 @@ const TaskCard = ({ task, onToggle, onEdit, onDelete }) => {
         </div>
       </div>
 
-      {/* Bottom accent strip */}
       <div
         className={`h-0.5 rounded-b-2xl ${
           isOverdue
@@ -909,9 +928,20 @@ const TaskFollowups = () => {
 
   const fetchTasks = async () => {
     try {
-      const res = await axios.get(`${BASE_URL}/tasks/`, {
-        params: { dealer_id: getDealerId() },
-      });
+      const authUser = getAuthUser();
+      const params = {};
+
+      if (authUser.role === "DEALER") {
+        // DEALER sees all tasks under their dealer_id
+        params.dealer_id = getDealerId();
+      } else if (authUser.role === "DEALER_USER") {
+        // DEALER_USER only sees tasks assigned to them
+        // ✅ Backend filters by assigned_to
+        params.dealer_id = getDealerId(); // still needed for security scope
+        params.assigned_to = authUser.id;
+      }
+
+      const res = await axios.get(`${BASE_URL}/tasks/`, { params });
       setTasks(res.data.data || []);
     } catch (err) {
       console.error("Failed to fetch tasks:", err);
@@ -919,16 +949,21 @@ const TaskFollowups = () => {
   };
 
   useEffect(() => {
+    const authUser = getAuthUser();
+
     const fetchLeads = async () => {
       try {
+        // ✅ getDealerId() returns correct dealer ID for both roles
         const res = await axios.get(`${BASE_URL}/leads/`, {
           params: { dealer_id: getDealerId() },
         });
         setLeads(res.data.data || []);
       } catch {}
     };
+
     const fetchUsers = async () => {
       try {
+        // ✅ getDealerId() returns correct dealer ID for both roles
         const res = await axios.get(`${BASE_URL}/auth/dealer-users`, {
           params: { dealer_id: getDealerId() },
         });
@@ -941,7 +976,6 @@ const TaskFollowups = () => {
     );
   }, []);
 
-  /* ── handlers ── */
   const openAdd = () => {
     setEditTask(null);
     setPanelOpen(true);
@@ -964,7 +998,6 @@ const TaskFollowups = () => {
     });
   };
 
-  // Toggle done — optimistic update
   const toggleDone = async (task) => {
     const newDone = !task.done;
     setTogglingId(task.id);
@@ -973,7 +1006,7 @@ const TaskFollowups = () => {
     );
     try {
       await axios.patch(`${BASE_URL}/tasks/${task.id}`, {
-        dealer_id: getDealerId(),
+        dealer_id: getDealerId(), // ✅ correct for both roles
         done: newDone,
       });
     } catch {
@@ -985,13 +1018,12 @@ const TaskFollowups = () => {
     }
   };
 
-  // Delete
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
     setDeleteLoading(true);
     try {
       await axios.delete(`${BASE_URL}/tasks/${deleteTarget.id}`, {
-        data: { dealer_id: getDealerId() },
+        data: { dealer_id: getDealerId() }, // ✅ correct for both roles
       });
       setTasks((prev) => prev.filter((t) => t.id !== deleteTarget.id));
       setDeleteTarget(null);
@@ -1002,7 +1034,6 @@ const TaskFollowups = () => {
     }
   };
 
-  /* ── derived state ── */
   const pending = tasks.filter((t) => !t.done);
   const completed = tasks.filter((t) => t.done);
   const overdue = pending.filter((t) => daysDiff(t.date) < 0);
