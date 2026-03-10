@@ -1,0 +1,71 @@
+image: docker:24
+
+variables:
+  DOCKER_HOST: unix:///var/run/docker.sock
+  DOCKER_DRIVER: overlay2
+
+stages:
+  - build
+  - deploy
+
+# -------------------
+# BUILD IMAGE
+# -------------------
+build_image:
+  stage: build
+  tags:
+    - realty
+  script:
+  - echo "🔹 Logging into GitLab Registry..."
+  - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+
+  - echo "🔹 Building Docker image..."
+  - |
+    docker build \
+      --build-arg REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL \
+      --build-arg REACT_APP_FASTAPI_URL=$REACT_APP_FASTAPI_URL \
+      -t $CI_REGISTRY_IMAGE:latest .
+
+  - echo "🔹 Pushing image..."
+  - docker push $CI_REGISTRY_IMAGE:latest
+
+  only:
+    - master
+
+# -------------------
+# DEPLOY TO EC2
+# -------------------
+deploy_to_ec2:
+  stage: deploy
+  tags:
+    - realty
+  script:
+    - export EC2_HOST="3.111.17.193"
+    - echo "$SeaGrainVueNew" | base64 -d > /tmp/ssh_key.pem
+    - chmod 600 /tmp/ssh_key.pem
+
+    - |
+      ssh -o StrictHostKeyChecking=no -i /tmp/ssh_key.pem ubuntu@$EC2_HOST /bin/bash << EOF
+      set -e
+
+      echo "🔹 Logging into GitLab Registry..."
+      docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+
+      echo "🔹 Pulling latest image..."
+      docker pull $CI_REGISTRY_IMAGE:latest
+
+      echo "🔹 Restarting container..."
+      docker stop realty-fe 2>/dev/null || true
+      docker rm realty-fe 2>/dev/null || true
+
+      docker run -d --name realty-fe -p 3040:80 \
+        --add-host=host.docker.internal:host-gateway \
+        --restart unless-stopped \
+        $CI_REGISTRY_IMAGE:latest
+
+      echo "✅ Realty FE deployed successfully."
+      EOF
+
+  only:
+    - master
+  timeout: 25m
