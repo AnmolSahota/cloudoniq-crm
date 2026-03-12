@@ -70,6 +70,8 @@ export const LEAD_STAGES = [
   "Negotiation",
   "Closed",
   "Lost",
+  "On Hold",
+  "Not Interested",
 ];
 
 export const STAGE_COLORS = {
@@ -95,6 +97,14 @@ export const STAGE_COLORS = {
     dot: "bg-emerald-500",
   },
   Lost: { bg: "bg-red-100", text: "text-red-700", dot: "bg-red-500" },
+  "On Hold": {
+    bg: "bg-gray-200",
+    text: "text-gray-700",
+  },
+  "Not Interested": {
+    bg: "bg-red-100",
+    text: "text-red-700",
+  },
 };
 
 export const LEAD_SOURCES = [
