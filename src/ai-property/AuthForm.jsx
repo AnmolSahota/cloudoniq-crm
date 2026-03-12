@@ -1,7 +1,7 @@
 import axios from "axios";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ToastContainer, toast } from "react-toastify";
+import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { BASE_URL } from "./config";
 
@@ -512,10 +512,7 @@ const LoginForm = () => {
         .animate-fade  { animation: fadeIn 0.8s ease both; animation-delay: 0.1s; }
       `}</style>
 
-      <ToastContainer
-        position="top-right"
-        toastStyle={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14 }}
-      />
+  
 
       <div className="login-root">
         {/* ── LEFT PANEL ─────────────────────────────────────────────────── */}

@@ -25,7 +25,10 @@ function AppContent() {
 export default function App() {
   return (
     <BrowserRouter>
-      <ToastContainer />
+      <ToastContainer
+        position="top-right"
+        toastStyle={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14 }}
+      />
       <AppContent />
     </BrowserRouter>
   );

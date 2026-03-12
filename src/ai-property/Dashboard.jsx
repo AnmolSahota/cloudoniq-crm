@@ -200,6 +200,14 @@ const NAV_CONFIG = {
       component: <DealerUserDashboard />, // 👈 changed
     },
     {
+      id: "add-property",
+      label: "Add Property",
+      icon: Plus,
+      color: "from-green-600 to-emerald-600",
+      description: "List a new property",
+      component: <AddPropertyForm />,
+    },
+    {
       id: "site-visits",
       label: "Site Visits",
       icon: Home,
