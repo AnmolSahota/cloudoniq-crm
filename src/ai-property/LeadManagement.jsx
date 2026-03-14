@@ -22,6 +22,9 @@ import {
   CheckCircle2,
   FileSpreadsheet,
   Building2,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from "lucide-react";
 import {
   PageHeader,
@@ -43,8 +46,6 @@ const getDealerId = () => {
     ? authUser.dealer_id || ""
     : authUser.id || "";
 };
-
-const ROWS_PER_PAGE = 10;
 
 const inputCls =
   "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none " +
@@ -774,12 +775,12 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
   );
   const [newNote, setNewNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [assigning, setAssigning] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [saved, setSaved] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
 
-  // ✅ Always call hook unconditionally (React rules) — just don't render dropdown for DEALER_USER
   const dealerUsers = useDealerUsers();
   const { properties, loading: propertiesLoading } = useProperties();
 
@@ -790,6 +791,11 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
   );
   const [editLocation, setEditLocation] = useState(lead.location || "");
 
+  // ✅ DEALER_USER can only edit if lead is assigned to them
+  const isAssignedToMe = isDealer_User && lead.assigned_to === authUser.id;
+  const isUnassigned = !lead.assigned_to;
+  const canEdit = !isDealer_User || isAssignedToMe;
+
   const isDirty =
     selectedStage !== lead.stage ||
     selectedUserId !== (lead.assigned_to || "") ||
@@ -799,6 +805,27 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
     editPhone.trim() !== (lead.contact_phone || "") ||
     editBudget !== (lead.budget ? String(lead.budget) : "") ||
     editLocation.trim() !== (lead.location || "");
+
+  // ✅ DEALER_USER self-assign handler
+  const handleSelfAssign = async () => {
+    setAssigning(true);
+    setError("");
+    try {
+      const res = await axios.patch(`${BASE_URL}/leads/${lead.id}`, {
+        dealer_id: getDealerId(),
+        assigned_to: authUser.id,
+        assigned_name: authUser.name,
+      });
+      onUpdated(res.data.data);
+    } catch (err) {
+      setError(
+        err.response?.data?.detail ||
+          "Failed to assign lead. Please try again.",
+      );
+    } finally {
+      setAssigning(false);
+    }
+  };
 
   const handleUpdate = async () => {
     if (!editName.trim()) {
@@ -813,19 +840,17 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
     setSaving(true);
     setError("");
     try {
-      // For DEALER_USER: preserve original assigned_to, cannot reassign
       const assignedUser = isDealer_User
         ? null
         : dealerUsers.find((u) => u.id === selectedUserId);
 
       const payload = {
-        dealer_id: getDealerId(), // ✅ correct for both roles
+        dealer_id: getDealerId(),
         name: editName.trim(),
         phone: editPhone.trim(),
         budget: editBudget ? Number(editBudget) : null,
         location: editLocation.trim() || null,
         stage: selectedStage,
-        // ✅ DEALER_USER preserves original assignment — cannot change it
         assigned_to: isDealer_User ? lead.assigned_to : selectedUserId || null,
         assigned_name: isDealer_User
           ? lead.assigned_name
@@ -857,7 +882,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
     setError("");
     try {
       await axios.delete(`${BASE_URL}/leads/${lead.id}`, {
-        data: { dealer_id: getDealerId() }, // ✅ correct for both roles
+        data: { dealer_id: getDealerId() },
       });
       onDeleted(lead.id);
       onClose();
@@ -883,13 +908,16 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setConfirmDelete(true)}
-              className="text-white/60 hover:text-red-300 transition"
-              title="Delete lead"
-            >
-              <Trash2 size={17} />
-            </button>
+            {/* ✅ Delete hidden for DEALER_USER */}
+            {!isDealer_User && (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="text-white/60 hover:text-red-300 transition"
+                title="Delete lead"
+              >
+                <Trash2 size={17} />
+              </button>
+            )}
             <button
               onClick={onClose}
               className="text-white/70 hover:text-white transition"
@@ -898,6 +926,44 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
             </button>
           </div>
         </div>
+
+        {/* ✅ "Assign to Me" banner — shown to DEALER_USER only when lead is unassigned */}
+        {isDealer_User && isUnassigned && (
+          <div className="bg-indigo-50 border-b border-indigo-200 px-5 py-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-indigo-800">
+                This lead is unassigned
+              </p>
+              <p className="text-xs text-indigo-500 mt-0.5">
+                Assign it to yourself to start working on it
+              </p>
+            </div>
+            <button
+              onClick={handleSelfAssign}
+              disabled={assigning}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition disabled:opacity-60"
+            >
+              {assigning ? (
+                <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              ) : (
+                <UserCircle size={13} />
+              )}
+              {assigning ? "Assigning..." : "Assign to Me"}
+            </button>
+          </div>
+        )}
+
+        {/* ✅ "Assigned to someone else" banner — read-only notice for DEALER_USER */}
+        {isDealer_User && !isUnassigned && !isAssignedToMe && (
+          <div className="bg-amber-50 border-b border-amber-200 px-5 py-3">
+            <p className="text-sm font-semibold text-amber-800">
+              Assigned to {lead.assigned_name}
+            </p>
+            <p className="text-xs text-amber-500 mt-0.5">
+              This lead is read-only. Only the assigned team member can edit it.
+            </p>
+          </div>
+        )}
 
         {confirmDelete && (
           <div className="bg-red-50 border-b border-red-200 px-5 py-3 flex items-center justify-between gap-3">
@@ -945,6 +1011,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                 <input
                   className={inputCls}
                   value={editName}
+                  disabled={!canEdit}
                   onChange={(e) => {
                     setEditName(e.target.value);
                     setSaved(false);
@@ -964,6 +1031,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                   <input
                     className={`${inputCls} pl-9`}
                     value={editPhone}
+                    disabled={!canEdit}
                     onChange={(e) => {
                       setEditPhone(e.target.value);
                       setSaved(false);
@@ -990,6 +1058,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               {LEAD_STAGES.map((s) => (
                 <button
                   key={s}
+                  disabled={!canEdit}
                   onClick={() => {
                     setSelectedStage(s);
                     setSaved(false);
@@ -998,7 +1067,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                     selectedStage === s
                       ? `${STAGE_COLORS[s].bg} ${STAGE_COLORS[s].text} border-transparent`
                       : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                  }`}
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   {s}
                 </button>
@@ -1018,12 +1087,12 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               />
               <select
                 value={selectedPropertyId}
+                disabled={!canEdit || propertiesLoading}
                 onChange={(e) => {
                   setSelectedPropertyId(e.target.value);
                   setSaved(false);
                 }}
                 className={`${inputCls} pl-9`}
-                disabled={propertiesLoading}
               >
                 <option value="">— No Property —</option>
                 {properties.map((property) => (
@@ -1035,7 +1104,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
             </div>
           </div>
 
-          {/* ✅ Assign To — hidden for DEALER_USER (cannot reassign) */}
+          {/* Assigned To — DEALER only */}
           {!isDealer_User && (
             <div>
               <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
@@ -1079,6 +1148,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                   type="number"
                   className={inputCls}
                   value={editBudget}
+                  disabled={!canEdit}
                   onChange={(e) => {
                     setEditBudget(e.target.value);
                     setSaved(false);
@@ -1093,6 +1163,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                 <input
                   className={inputCls}
                   value={editLocation}
+                  disabled={!canEdit}
                   onChange={(e) => {
                     setEditLocation(e.target.value);
                     setSaved(false);
@@ -1132,16 +1203,19 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                 </span>
               )}
             </div>
-            <textarea
-              value={newNote}
-              onChange={(e) => {
-                setNewNote(e.target.value);
-                setSaved(false);
-              }}
-              rows={3}
-              placeholder="Add a new note..."
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm text-gray-800 placeholder-gray-300 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 resize-none transition mb-3"
-            />
+            {/* ✅ Notes textarea only shown if canEdit */}
+            {canEdit && (
+              <textarea
+                value={newNote}
+                onChange={(e) => {
+                  setNewNote(e.target.value);
+                  setSaved(false);
+                }}
+                rows={3}
+                placeholder="Add a new note..."
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm text-gray-800 placeholder-gray-300 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 resize-none transition mb-3"
+              />
+            )}
             {lead.notes?.length > 0 && (
               <>
                 <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">
@@ -1160,24 +1234,27 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
           >
             Close
           </button>
-          <button
-            onClick={handleUpdate}
-            disabled={(!isDirty && !saved) || saving}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2 shadow-sm ${
-              saved
-                ? "bg-green-500 text-white cursor-default"
-                : isDirty
-                  ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:opacity-90"
-                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
-            } disabled:opacity-60`}
-          >
-            {saving ? (
-              <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-            ) : (
-              <Save size={15} />
-            )}
-            {saving ? "Saving..." : saved ? "Saved!" : "Update Lead"}
-          </button>
+          {/* ✅ Update button only shown if canEdit */}
+          {canEdit && (
+            <button
+              onClick={handleUpdate}
+              disabled={(!isDirty && !saved) || saving}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2 shadow-sm ${
+                saved
+                  ? "bg-green-500 text-white cursor-default"
+                  : isDirty
+                    ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:opacity-90"
+                    : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              } disabled:opacity-60`}
+            >
+              {saving ? (
+                <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Save size={15} />
+              )}
+              {saving ? "Saving..." : saved ? "Saved!" : "Update Lead"}
+            </button>
+          )}
         </div>
       </div>
       <div className="flex-1 bg-black/40" onClick={onClose} />
@@ -1186,9 +1263,8 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
 };
 
 /* ── Pagination ──────────────────────────────────────────────────────────────── */
-const Pagination = ({ total, page, perPage, onChange }) => {
+const Pagination = ({ total, page, perPage, onPerPageChange, onChange }) => {
   const totalPages = Math.ceil(total / perPage);
-  if (totalPages <= 1) return null;
   const allPages = Array.from({ length: totalPages }, (_, i) => i + 1);
   const visible = allPages.filter(
     (p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1,
@@ -1201,43 +1277,80 @@ const Pagination = ({ total, page, perPage, onChange }) => {
     prev = p;
   }
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50/60">
-      <span className="text-xs text-gray-500">
-        Showing {Math.min((page - 1) * perPage + 1, total)}–
-        {Math.min(page * perPage, total)} of {total} leads
-      </span>
-      <div className="flex items-center gap-1">
-        <button
-          onClick={() => onChange(page - 1)}
-          disabled={page === 1}
-          className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+    <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50/60 flex-wrap gap-2">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-500">Rows per page:</span>
+        <select
+          value={perPage}
+          onChange={(e) => {
+            onPerPageChange(Number(e.target.value));
+          }}
+          className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-700 outline-none focus:border-indigo-400 transition"
         >
-          <ChevronLeft size={16} />
-        </button>
-        {withEllipsis.map((p, i) =>
-          p === "..." ? (
-            <span key={`e-${i}`} className="px-1 text-gray-400 text-sm">
-              …
-            </span>
-          ) : (
+          {[10, 25, 50, 100].map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-500">
+          {Math.min((page - 1) * perPage + 1, total)}–
+          {Math.min(page * perPage, total)} of {total} leads
+        </span>
+        {totalPages > 1 && (
+          <div className="flex items-center gap-1">
             <button
-              key={p}
-              onClick={() => onChange(p)}
-              className={`w-8 h-8 rounded-lg text-sm font-semibold transition ${p === page ? "bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}
+              onClick={() => onChange(page - 1)}
+              disabled={page === 1}
+              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
             >
-              {p}
+              <ChevronLeft size={16} />
             </button>
-          ),
+            {withEllipsis.map((p, i) =>
+              p === "..." ? (
+                <span key={`e-${i}`} className="px-1 text-gray-400 text-sm">
+                  …
+                </span>
+              ) : (
+                <button
+                  key={p}
+                  onClick={() => onChange(p)}
+                  className={`w-8 h-8 rounded-lg text-sm font-semibold transition ${p === page ? "bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}
+                >
+                  {p}
+                </button>
+              ),
+            )}
+            <button
+              onClick={() => onChange(page + 1)}
+              disabled={page === totalPages}
+              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
         )}
-        <button
-          onClick={() => onChange(page + 1)}
-          disabled={page === totalPages}
-          className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
-        >
-          <ChevronRight size={16} />
-        </button>
       </div>
     </div>
+  );
+};
+
+const SortIcon = ({ colKey, sortConfig }) => {
+  const active = sortConfig.key === colKey;
+
+  if (active && sortConfig.dir === "asc")
+    return <ArrowUp size={13} className="inline ml-1 text-indigo-600" />;
+  if (active && sortConfig.dir === "desc")
+    return <ArrowDown size={13} className="inline ml-1 text-indigo-600" />;
+
+  return (
+    <ArrowUpDown
+      size={13}
+      className="inline ml-1 text-gray-300 group-hover:text-gray-400 transition"
+    />
   );
 };
 
@@ -1245,7 +1358,7 @@ const Pagination = ({ total, page, perPage, onChange }) => {
 const LeadManagement = () => {
   const authUser = getAuthUser();
   const isDealer_User = authUser.role === "DEALER_USER";
-
+  const [assigningLeadId, setAssigningLeadId] = useState(null);
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1256,25 +1369,54 @@ const LeadManagement = () => {
   const [search, setSearch] = useState("");
   const [filterStage, setFilterStage] = useState("All");
   const [filterSource, setFilterSource] = useState("All");
+  const [filterAssigned, setFilterAssigned] = useState("All");
   const [page, setPage] = useState(1);
 
+  // ADD this state inside LeadManagement (alongside other useState hooks):
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const handleInlineAssign = async (e, lead) => {
+    e.stopPropagation(); // ✅ prevent row click opening the panel
+    setAssigningLeadId(lead.id);
+    try {
+      const res = await axios.patch(`${BASE_URL}/leads/${lead.id}`, {
+        dealer_id: getDealerId(),
+        assigned_to: authUser.id,
+        assigned_name: authUser.name,
+      });
+      handleUpdated(res.data.data);
+    } catch {
+      // silently fail — user can try via detail panel
+    } finally {
+      setAssigningLeadId(null);
+    }
+  };
+  // ADD this handler (alongside handleSave, handleUpdated, etc.):
+  const handlePerPageChange = (n) => {
+    setRowsPerPage(n);
+    setPage(1);
+  };
+  const [sortConfig, setSortConfig] = useState({ key: null, dir: "asc" });
+
+  const handleSort = (key) => {
+    setSortConfig((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: "asc" },
+    );
+  };
   useEffect(() => {
     const fetchLeads = async () => {
       try {
-        const params = {};
-        if (authUser.role === "DEALER") {
-          // DEALER sees all leads under their dealer_id
-          params.dealer_id = getDealerId();
-        } else if (authUser.role === "DEALER_USER") {
-          // DEALER_USER sees only leads assigned to them
-          params.dealer_id = getDealerId();
+        const params = { dealer_id: getDealerId() };
+
+        if (authUser.role === "DEALER_USER") {
           params.assigned_to = authUser.id;
+          params.include_unassigned = true; // ✅ Lead Management needs unassigned too
         }
 
         const res = await axios.get(`${BASE_URL}/leads/`, { params });
         setLeads(res.data.data || []);
-        // ✅ Only show unassigned warning for DEALER
-        setUnassignedCount(isDealer_User ? 0 : res.data.unassigned_count || 0);
+        setUnassignedCount(res.data.unassigned_count || 0);
       } catch {
         setError("Failed to load leads. Please try again.");
       } finally {
@@ -1284,28 +1426,47 @@ const LeadManagement = () => {
     fetchLeads();
   }, []);
 
-  const filtered = useMemo(
-    () =>
-      leads.filter((l) => {
-        if (
-          search &&
-          !(l.contact_name || "")
-            .toLowerCase()
-            .includes(search.toLowerCase()) &&
-          !(l.contact_phone || "").includes(search) &&
-          !(l.property_name || "").toLowerCase().includes(search.toLowerCase())
-        )
-          return false;
-        if (filterStage !== "All" && l.stage !== filterStage) return false;
-        if (filterSource !== "All" && l.source !== filterSource) return false;
-        return true;
-      }),
-    [leads, search, filterStage, filterSource],
-  );
+  const filtered = useMemo(() => {
+    const result = leads.filter((l) => {
+      if (
+        search &&
+        !(l.contact_name || "").toLowerCase().includes(search.toLowerCase()) &&
+        !(l.contact_phone || "").includes(search) &&
+        !(l.property_name || "").toLowerCase().includes(search.toLowerCase()) &&
+        !(l.location || "").toLowerCase().includes(search.toLowerCase())
+      )
+        return false;
+      if (filterStage !== "All" && l.stage !== filterStage) return false;
+      if (filterSource !== "All" && l.source !== filterSource) return false;
+      if (filterAssigned === "unassigned" && l.assigned_to) return false;
+      if (filterAssigned === "assigned" && !l.assigned_to) return false;
+      return true;
+    });
 
+    if (!sortConfig.key) return result;
+
+    return [...result].sort((a, b) => {
+      let aVal, bVal;
+      if (sortConfig.key === "lead") {
+        aVal = (a.contact_name || "").toLowerCase();
+        bVal = (b.contact_name || "").toLowerCase();
+      } else if (sortConfig.key === "budget") {
+        aVal = a.budget ?? -1;
+        bVal = b.budget ?? -1;
+      } else if (sortConfig.key === "assigned") {
+        aVal = (a.assigned_name || "").toLowerCase();
+        bVal = (b.assigned_name || "").toLowerCase();
+      }
+      if (aVal < bVal) return sortConfig.dir === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortConfig.dir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [leads, search, filterStage, filterSource, filterAssigned, sortConfig]);
+
+  // REPLACE the paginated useMemo:
   const paginated = useMemo(
-    () => filtered.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE),
-    [filtered, page],
+    () => filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage),
+    [filtered, page, rowsPerPage],
   );
 
   const resetPage = () => setPage(1);
@@ -1316,12 +1477,9 @@ const LeadManagement = () => {
       prev.map((l) => (l.id === updatedLead.id ? updatedLead : l)),
     );
     setSelectedLead(updatedLead);
+    // ✅ Works for both DEALER and DEALER_USER now
     setUnassignedCount((c) =>
-      !updatedLead.assigned_to &&
-      updatedLead.stage !== "Closed" &&
-      updatedLead.stage !== "Lost"
-        ? c
-        : Math.max(0, c - 1),
+      updatedLead.assigned_to ? Math.max(0, c - 1) : c,
     );
   };
   const handleDeleted = (id) =>
@@ -1331,8 +1489,11 @@ const LeadManagement = () => {
     setUnassignedCount((c) => c + newLeads.length);
   };
 
-  const hasFilters = search || filterStage !== "All" || filterSource !== "All";
-
+  const hasFilters =
+    search ||
+    filterStage !== "All" ||
+    filterSource !== "All" ||
+    filterAssigned !== "All";
   return (
     <div className="p-6 space-y-5">
       <PageHeader
@@ -1399,7 +1560,7 @@ const LeadManagement = () => {
           <Search size={15} className="text-gray-400 shrink-0" />
           <input
             className="outline-none text-sm w-full bg-transparent"
-            placeholder="Search name, phone, property..."
+            placeholder="Search name, phone, property, location..."
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -1433,12 +1594,29 @@ const LeadManagement = () => {
             <option key={s}>{s}</option>
           ))}
         </select>
+        {/* Only visible to DEALER */}
+        {!isDealer_User && (
+          <select
+            value={filterAssigned}
+            onChange={(e) => {
+              setFilterAssigned(e.target.value);
+              resetPage();
+            }}
+            className="px-3 py-2 rounded-xl border bg-white text-sm text-gray-700 shadow-sm outline-none"
+          >
+            <option value="All">All Assigned</option>
+            <option value="unassigned">Unassigned</option>
+            <option value="assigned">Assigned</option>
+          </select>
+        )}
         {hasFilters && (
           <button
+            // inside Clear button onClick:
             onClick={() => {
               setSearch("");
               setFilterStage("All");
               setFilterSource("All");
+              setFilterAssigned("All");
               resetPage();
             }}
             className="flex items-center gap-1 px-3 py-2 rounded-xl text-sm text-gray-500 hover:bg-gray-100 border transition"
@@ -1473,24 +1651,62 @@ const LeadManagement = () => {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    {[
-                      "Lead",
-                      "Phone",
-                      "Property",
-                      "Budget",
-                      "Stage",
-                      "Source",
-                      // ✅ Hide "Assigned To" column header for DEALER_USER
-                      ...(isDealer_User ? [] : ["Assigned To"]),
-                      "",
-                    ].map((h) => (
+                    {/* Lead — sortable */}
+                    <th
+                      onClick={() => handleSort("lead")}
+                      className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition"
+                    >
+                      Lead <SortIcon colKey="lead" sortConfig={sortConfig} />
+                    </th>
+
+                    {/* Phone — static */}
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                      Phone
+                    </th>
+
+                    {/* Property — static */}
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                      Property
+                    </th>
+
+                    {/* Location — static */}
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                      Location
+                    </th>
+
+                    {/* Budget — sortable */}
+                    <th
+                      onClick={() => handleSort("budget")}
+                      className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition"
+                    >
+                      Budget{" "}
+                      <SortIcon colKey="budget" sortConfig={sortConfig} />
+                    </th>
+
+                    {/* Stage — static */}
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                      Stage
+                    </th>
+
+                    {/* Assigned To — sortable, hidden for DEALER_USER */}
+                    {!isDealer_User && (
                       <th
-                        key={h}
-                        className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap"
+                        onClick={() => handleSort("assigned")}
+                        className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition"
                       >
-                        {h}
+                        Assigned To{" "}
+                        <SortIcon colKey="assigned" sortConfig={sortConfig} />
                       </th>
-                    ))}
+                    )}
+
+                    {/* Last column — Status for DEALER_USER, empty for DEALER */}
+                    {isDealer_User ? (
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                        Status
+                      </th>
+                    ) : (
+                      <th className="px-4 py-3" />
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -1500,6 +1716,7 @@ const LeadManagement = () => {
                       onClick={() => setSelectedLead(lead)}
                       className="hover:bg-indigo-50/40 transition cursor-pointer"
                     >
+                      {/* Lead */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
@@ -1518,26 +1735,39 @@ const LeadManagement = () => {
                           </div>
                         </div>
                       </td>
+
+                      {/* Phone */}
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                         {lead.contact_phone || "—"}
                       </td>
+
+                      {/* Property */}
                       <td className="px-4 py-3 text-gray-500 max-w-[140px] truncate">
                         {lead.property_name || (
                           <span className="text-gray-300">—</span>
                         )}
                       </td>
+
+                      {/* Location */}
+                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                        {lead.location || (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
+
+                      {/* Budget */}
                       <td className="px-4 py-3 font-semibold text-gray-800 whitespace-nowrap">
                         {lead.budget
                           ? `₹${(lead.budget / 100000).toFixed(0)}L`
                           : "—"}
                       </td>
+
+                      {/* Stage */}
                       <td className="px-4 py-3">
                         <StageBadge stage={lead.stage} />
                       </td>
-                      <td className="px-4 py-3">
-                        <SourceBadge source={lead.source} />
-                      </td>
-                      {/* ✅ Hide "Assigned To" cell for DEALER_USER */}
+
+                      {/* Assigned To — DEALER only */}
                       {!isDealer_User && (
                         <td className="px-4 py-3 whitespace-nowrap text-xs">
                           {lead.assigned_name ? (
@@ -1551,9 +1781,47 @@ const LeadManagement = () => {
                           )}
                         </td>
                       )}
-                      <td className="px-4 py-3">
-                        <ChevronRight size={16} className="text-gray-300" />
-                      </td>
+
+                      {/* Last column — Assign to Me / status for DEALER_USER, chevron for DEALER */}
+                      {isDealer_User ? (
+                        <td
+                          className="px-4 py-3"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {!lead.assigned_to ? (
+                            // ✅ Unassigned — show Assign to Me button
+                            <button
+                              onClick={(e) => handleInlineAssign(e, lead)}
+                              disabled={assigningLeadId === lead.id}
+                              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold hover:bg-indigo-100 transition disabled:opacity-60 whitespace-nowrap"
+                            >
+                              {assigningLeadId === lead.id ? (
+                                <span className="w-3 h-3 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
+                              ) : (
+                                <UserCircle size={13} />
+                              )}
+                              {assigningLeadId === lead.id
+                                ? "Assigning..."
+                                : "Assign to Me"}
+                            </button>
+                          ) : lead.assigned_to === authUser.id ? (
+                            // ✅ Assigned to me — green pill
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold whitespace-nowrap">
+                              <CheckCircle2 size={12} /> Mine
+                            </span>
+                          ) : (
+                            // ✅ Assigned to someone else — gray read-only pill
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gray-100 border border-gray-200 text-gray-400 text-xs font-semibold whitespace-nowrap">
+                              <UserCircle size={12} />{" "}
+                              {lead.assigned_name || "Assigned"}
+                            </span>
+                          )}
+                        </td>
+                      ) : (
+                        <td className="px-4 py-3">
+                          <ChevronRight size={16} className="text-gray-300" />
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -1569,7 +1837,8 @@ const LeadManagement = () => {
             <Pagination
               total={filtered.length}
               page={page}
-              perPage={ROWS_PER_PAGE}
+              perPage={rowsPerPage}
+              onPerPageChange={handlePerPageChange}
               onChange={setPage}
             />
           </>

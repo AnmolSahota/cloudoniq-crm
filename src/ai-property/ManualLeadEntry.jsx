@@ -1,17 +1,14 @@
 // src/pages/dealer/ManualLeadEntry.jsx
 
-import { useState } from "react";
 import {
-  UserPlus,
-  Phone,
-  Mail,
   Building2,
-  MapPin,
-  DollarSign,
-  Users,
+  Phone,
+  UserPlus,
+  Users
 } from "lucide-react";
+import { useState } from "react";
 import { PageHeader } from "./SharedComponents";
-import { MOCK_PROPERTIES, LEAD_SOURCES } from "./mockData";
+import { LEAD_SOURCES, MOCK_PROPERTIES } from "./mockData";
 
 const INIT = {
   name: "",

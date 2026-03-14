@@ -66,6 +66,9 @@ export const PLAN_CONFIG = {
 export const LEAD_STAGES = [
   "New",
   "Contacted",
+  "Not Contactable",
+  "Suspect",
+  "Prospect",
   "Visit Scheduled",
   "Negotiation",
   "Closed",
@@ -80,6 +83,12 @@ export const STAGE_COLORS = {
     bg: "bg-yellow-100",
     text: "text-yellow-700",
     dot: "bg-yellow-500",
+  },
+  Suspect: { bg: "bg-cyan-100", text: "text-cyan-700", dot: "bg-cyan-500" },
+  Prospect: {
+    bg: "bg-indigo-100",
+    text: "text-indigo-700",
+    dot: "bg-indigo-500",
   },
   "Visit Scheduled": {
     bg: "bg-purple-100",
@@ -97,13 +106,16 @@ export const STAGE_COLORS = {
     dot: "bg-emerald-500",
   },
   Lost: { bg: "bg-red-100", text: "text-red-700", dot: "bg-red-500" },
-  "On Hold": {
-    bg: "bg-gray-200",
-    text: "text-gray-700",
+  "On Hold": { bg: "bg-gray-200", text: "text-gray-600", dot: "bg-gray-400" },
+  "Not Contactable": {
+    bg: "bg-slate-100",
+    text: "text-slate-600",
+    dot: "bg-slate-400",
   },
   "Not Interested": {
-    bg: "bg-red-100",
-    text: "text-red-700",
+    bg: "bg-rose-100",
+    text: "text-rose-700",
+    dot: "bg-rose-500",
   },
 };
 
@@ -122,46 +134,6 @@ export const VISIT_STATUSES = [
   "No Show",
   "Interested",
   "Not Interested",
-];
-
-/* ─── SALES TEAM (users under this dealer) ───────────────────────────────────── */
-export const MOCK_SALES_TEAM = [
-  {
-    id: 1,
-    name: "Vikram Singh",
-    email: "vikram@abcproperties.com",
-    phone: "9876001122",
-    role: "SALES_PERSON",
-    status: "ACTIVE",
-    assignedLeads: 3,
-    completedVisits: 6,
-    closedDeals: 2,
-    joinedAt: "2024-03-01",
-  },
-  {
-    id: 2,
-    name: "Priya Sharma",
-    email: "priya@abcproperties.com",
-    phone: "9876003344",
-    role: "SALES_PERSON",
-    status: "ACTIVE",
-    assignedLeads: 2,
-    completedVisits: 4,
-    closedDeals: 3,
-    joinedAt: "2024-04-15",
-  },
-  {
-    id: 3,
-    name: "Amit Rao",
-    email: "amit@abcproperties.com",
-    phone: "9876005566",
-    role: "SALES_PERSON",
-    status: "INACTIVE",
-    assignedLeads: 0,
-    completedVisits: 1,
-    closedDeals: 0,
-    joinedAt: "2024-06-20",
-  },
 ];
 
 /* ─── PROPERTIES ─────────────────────────────────────────────────────────────── */
