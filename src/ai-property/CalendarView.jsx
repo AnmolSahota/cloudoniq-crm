@@ -63,6 +63,13 @@ const TYPE_STYLES = {
   },
 };
 
+// ✅ Status-aware dot color for task items in sidebar and popover
+const TASK_STATUS_DOT = {
+  pending: "bg-gray-400",
+  in_progress: "bg-blue-500",
+  completed: "bg-emerald-500",
+};
+
 // ── Helpers: Extract data from nested lead object ────────────────────────────
 const getLeadName = (item) =>
   item.lead?.contact_name ||
@@ -88,26 +95,40 @@ const getPropertyLocation = (item) =>
   null;
 
 /* ─── STATUS PILL ─────────────────────────────────────────────────────────── */
-const StatusPills = ({ event }) => (
-  <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-    {event.status && (
-      <span className="text-[10px] font-semibold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
-        {event.status}
-      </span>
-    )}
-    {event.type === "task" && (
+const StatusPills = ({ event }) => {
+  if (event.type !== "task") return null;
+
+  const statusStyleMap = {
+    pending: { bg: "bg-gray-100", text: "text-gray-600", label: "Pending" },
+    in_progress: {
+      bg: "bg-blue-100",
+      text: "text-blue-700",
+      label: "In Progress",
+    },
+    completed: {
+      bg: "bg-emerald-100",
+      text: "text-emerald-700",
+      label: "Completed",
+    },
+  };
+
+  const s = statusStyleMap[event.taskStatus] || statusStyleMap.pending;
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+      {event.taskType && (
+        <span className="text-[10px] font-semibold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
+          {event.taskType}
+        </span>
+      )}
       <span
-        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-          event.taskDone
-            ? "bg-emerald-100 text-emerald-700"
-            : "bg-amber-100 text-amber-700"
-        }`}
+        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${s.bg} ${s.text}`}
       >
-        {event.taskDone ? "Completed" : "Pending"}
+        {s.label}
       </span>
-    )}
-  </div>
-);
+    </div>
+  );
+};
 
 /* ─── DAY DETAIL POPOVER ─────────────────────────────────────────────────── */
 const DayDetail = ({ dateKey, events, onClose }) => {
@@ -134,6 +155,13 @@ const DayDetail = ({ dateKey, events, onClose }) => {
           return (
             <div key={i} className="px-3 py-2.5 hover:bg-gray-50 transition">
               <div className="flex items-center gap-1.5 mb-1">
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${
+                    e.type === "task"
+                      ? TASK_STATUS_DOT[e.taskStatus] || TASK_STATUS_DOT.pending
+                      : s.dot
+                  }`}
+                />
                 <span
                   className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${s.badge}`}
                 >
@@ -277,14 +305,14 @@ const CalendarView = () => {
   tasks.forEach((t) =>
     add(t.date, {
       type: "task",
-      leadName: getLeadName(t),
-      leadPhone: getLeadPhone(t),
+      leadName: t.lead ? getLeadName(t) : "Standalone Task", // ✅ handle no lead
+      leadPhone: t.lead ? getLeadPhone(t) : null,
       propertyName: getPropertyName(t),
       propertyLocation: null,
       note: t.note || null,
       time: t.time ?? null,
-      status: t.type,
-      taskDone: t.done,
+      taskType: t.type, // ✅ Call/Meeting/Visit/Other
+      taskStatus: t.status || "pending", // ✅ replaces taskDone
       meta: t.assigned_name ? `Assigned to ${t.assigned_name}` : null,
     }),
   );
@@ -310,7 +338,9 @@ const CalendarView = () => {
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 
   const totalVisits = visits.length;
-  const pendingTasks = tasks.filter((t) => !t.done).length;
+  const pendingTasks = tasks.filter(
+    (t) => (t.status || "pending") !== "completed",
+  ).length;
   const todayEvents = (eventMap[todayStr] || []).length;
 
   return (
@@ -331,9 +361,16 @@ const CalendarView = () => {
           },
           {
             label: "Pending Tasks",
-            count: pendingTasks,
-            color: "bg-amber-50 text-amber-700 border-amber-100",
-            dot: "bg-amber-400",
+            count: tasks.filter((t) => (t.status || "pending") === "pending")
+              .length,
+            color: "bg-gray-100 text-gray-700 border-gray-200",
+            dot: "bg-gray-400",
+          },
+          {
+            label: "In Progress",
+            count: tasks.filter((t) => t.status === "in_progress").length,
+            color: "bg-blue-50 text-blue-700 border-blue-100",
+            dot: "bg-blue-500",
           },
           {
             label: "Today",
@@ -497,7 +534,12 @@ const CalendarView = () => {
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <span
-                        className={`w-2 h-2 rounded-full shrink-0 ${s.dot}`}
+                        className={`w-2 h-2 rounded-full shrink-0 ${
+                          e.type === "task"
+                            ? TASK_STATUS_DOT[e.taskStatus] ||
+                              TASK_STATUS_DOT.pending
+                            : s.dot
+                        }`}
                       />
                       <span className="font-semibold text-sm text-gray-800 truncate">
                         {e.leadName}

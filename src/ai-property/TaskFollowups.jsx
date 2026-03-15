@@ -18,14 +18,13 @@ import {
   Pencil,
   StickyNote,
   Trash2,
+  PlayCircle,
+  CircleDashed,
 } from "lucide-react";
 import { BASE_URL } from "./config";
 
 /* ─── AUTH HELPERS ─────────────────────────────────────────────────────────── */
 const getAuthUser = () => JSON.parse(localStorage.getItem("auth_user")) || {};
-
-// DEALER      → their own id IS the dealer_id
-// DEALER_USER → belongs to a dealer, use dealer_id field
 const getDealerId = () => {
   const authUser = getAuthUser();
   return authUser.role === "DEALER_USER"
@@ -33,34 +32,58 @@ const getDealerId = () => {
     : authUser.id || "";
 };
 
-/* ─── CONSTANTS ────────────────────────────────────────────────────────────── */
+/* ─── STATUS CONFIG ─────────────────────────────────────────────────────────── */
+const STATUS_CONFIG = {
+  pending: {
+    label: "Pending",
+    icon: CircleDashed,
+    bg: "bg-gray-100",
+    text: "text-gray-500",
+    border: "border-gray-200",
+    dot: "bg-gray-400",
+  },
+  in_progress: {
+    label: "In Progress",
+    icon: PlayCircle,
+    bg: "bg-blue-50",
+    text: "text-blue-600",
+    border: "border-blue-200",
+    dot: "bg-blue-500",
+  },
+  completed: {
+    label: "Completed",
+    icon: CheckCircle,
+    bg: "bg-emerald-50",
+    text: "text-emerald-600",
+    border: "border-emerald-200",
+    dot: "bg-emerald-500",
+  },
+};
+
+/* ─── TYPE CONFIG ───────────────────────────────────────────────────────────── */
 const TYPE_CONFIG = {
   Call: {
     icon: Phone,
     bg: "bg-blue-50",
     text: "text-blue-600",
-    ring: "ring-blue-200",
     accent: "#3b82f6",
   },
   Meeting: {
     icon: Users,
     bg: "bg-violet-50",
     text: "text-violet-600",
-    ring: "ring-violet-200",
     accent: "#7c3aed",
   },
   Visit: {
     icon: Calendar,
     bg: "bg-emerald-50",
     text: "text-emerald-600",
-    ring: "ring-emerald-200",
     accent: "#059669",
   },
   Other: {
     icon: StickyNote,
     bg: "bg-gray-50",
     text: "text-gray-600",
-    ring: "ring-gray-200",
     accent: "#6b7280",
   },
 };
@@ -87,12 +110,80 @@ const initials = (name) =>
     .slice(0, 2)
     .toUpperCase() || "?";
 
-const getLeadName = (task) => task.lead?.contact_name || "—";
-const getLeadPhone = (task) => task.lead?.contact_phone || "—";
+const getLeadName = (task) => task.lead?.contact_name || null;
+const getLeadPhone = (task) => task.lead?.contact_phone || null;
 const getLeadProp = (task) => task.lead?.property_name || null;
 const getLeadStage = (task) => task.lead?.stage || null;
 
-/* ─── SEARCHABLE DROPDOWN ──────────────────────────────────────────────────── */
+/* ─── STATUS BUTTON ─────────────────────────────────────────────────────────── */
+const StatusButton = ({ status, onClick, disabled }) => {
+  const [showMenu, setShowMenu] = useState(false);
+  const ref = useRef();
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
+  const Icon = cfg.icon;
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (!ref.current?.contains(e.target)) setShowMenu(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        disabled={disabled}
+        onClick={() => setShowMenu((o) => !o)}
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all ${cfg.bg} ${cfg.text} ${cfg.border} hover:opacity-80 disabled:opacity-50`}
+      >
+        {disabled ? (
+          <span className="w-3 h-3 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+        ) : (
+          <Icon size={12} />
+        )}
+        {cfg.label}
+        <ChevronDown
+          size={10}
+          className={`transition-transform ${showMenu ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {showMenu && (
+        <div className="absolute top-full mt-1.5 left-0 z-50 bg-white rounded-xl border border-gray-100 shadow-xl overflow-hidden min-w-[155px]">
+          {Object.entries(STATUS_CONFIG).map(([key, s]) => {
+            const SIcon = s.icon;
+            const isActive = key === status;
+            return (
+              <button
+                key={key}
+                onClick={() => {
+                  onClick(key);
+                  setShowMenu(false);
+                }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-semibold transition hover:bg-gray-50 ${isActive ? "bg-gray-50" : ""}`}
+              >
+                <div className={`w-2 h-2 rounded-full shrink-0 ${s.dot}`} />
+                <SIcon size={12} className={s.text} />
+                <span className={isActive ? s.text : "text-gray-600"}>
+                  {s.label}
+                </span>
+                {isActive && (
+                  <CheckCircle
+                    size={11}
+                    className="ml-auto text-indigo-500 shrink-0"
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ─── SEARCHABLE DROPDOWN ───────────────────────────────────────────────────── */
 const SearchableDropdown = ({
   label,
   placeholder,
@@ -202,7 +293,7 @@ const SearchableDropdown = ({
   );
 };
 
-/* ─── DELETE CONFIRM MODAL ─────────────────────────────────────────────────── */
+/* ─── DELETE CONFIRM MODAL ──────────────────────────────────────────────────── */
 const DeleteConfirmModal = ({ task, onConfirm, onCancel, loading }) => (
   <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
     <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
@@ -213,11 +304,18 @@ const DeleteConfirmModal = ({ task, onConfirm, onCancel, loading }) => (
       <div className="text-center">
         <h3 className="font-black text-gray-900 text-lg">Delete Task?</h3>
         <p className="text-sm text-gray-500 mt-1">
-          This will permanently remove the follow-up task for{" "}
-          <span className="font-semibold text-gray-700">
-            {getLeadName(task)}
-          </span>
-          . This action cannot be undone.
+          {task.lead ? (
+            <>
+              This will permanently remove the follow-up task for{" "}
+              <span className="font-semibold text-gray-700">
+                {getLeadName(task)}
+              </span>
+              .
+            </>
+          ) : (
+            "This will permanently remove this standalone task."
+          )}{" "}
+          This action cannot be undone.
         </p>
       </div>
       <div className="flex gap-3 pt-1">
@@ -246,7 +344,7 @@ const DeleteConfirmModal = ({ task, onConfirm, onCancel, loading }) => (
   </div>
 );
 
-/* ─── TASK PANEL ───────────────────────────────────────────────────────────── */
+/* ─── TASK PANEL ────────────────────────────────────────────────────────────── */
 const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
   const authUser = getAuthUser();
   const isDealer_User = authUser.role === "DEALER_USER";
@@ -256,14 +354,13 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
     if (!task?.lead_id) return null;
     return {
       id: task.lead_id,
-      name: getLeadName(task),
-      phone: getLeadPhone(task),
+      name: getLeadName(task) || "—",
+      phone: getLeadPhone(task) || "—",
       stage: getLeadStage(task),
       property_name: getLeadProp(task),
     };
   };
 
-  // ✅ DEALER_USER skips the Assign step
   const STEPS = isDealer_User
     ? [
         { num: 1, label: "Type" },
@@ -307,7 +404,7 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
 
   const canProceed = () => {
     if (step === 1) return !!form.type;
-    if (step === 2) return !!form.lead;
+    if (step === 2) return true; // ✅ lead is optional
     if (step === 3) return !!form.date;
     return true;
   };
@@ -315,24 +412,18 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
   const handleSubmit = async (e) => {
     e?.preventDefault();
     setError("");
-    if (!form.lead) {
-      setError("Please select a lead.");
-      return;
-    }
     if (!form.date) {
       setError("Please set a follow-up date.");
       return;
     }
-
     setLoading(true);
     try {
       const payload = {
-        dealer_id: getDealerId(), // ✅ correct dealer_id for both roles
-        lead_id: form.lead.id,
+        dealer_id: getDealerId(),
+        lead_id: form.lead?.id || null,
         type: form.type,
         date: form.date,
         note: form.note,
-        // ✅ DEALER_USER auto-assigns to themselves; on edit keep original
         assigned_to: isDealer_User
           ? isEdit
             ? editTask.assigned_to
@@ -343,7 +434,8 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
             ? editTask.assigned_name
             : authUser.name
           : form.assignedTo?.name || null,
-        done: editTask?.done || false,
+        // ✅ only status — done field removed
+        status: editTask?.status || "pending",
       };
 
       let res;
@@ -363,6 +455,16 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
     }
   };
 
+  const stepDesc = isEdit
+    ? `Updating task${editTask.lead ? ` for ${getLeadName(editTask)}` : ""}`
+    : step === 1
+      ? "Choose the type of follow-up"
+      : step === 2
+        ? "Link a lead (optional)"
+        : step === 3
+          ? "Set date and add notes"
+          : "Assign to a team member";
+
   return (
     <div className="fixed inset-0 z-50 flex justify-start">
       <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col">
@@ -373,17 +475,7 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
               <div className="font-black text-lg">
                 {isEdit ? "Edit Task" : "New Task"}
               </div>
-              <div className="text-white/70 text-sm mt-0.5">
-                {isEdit
-                  ? `Updating task for ${getLeadName(editTask)}`
-                  : step === 1
-                    ? "Choose the type of follow-up"
-                    : step === 2
-                      ? "Select the lead to follow up on"
-                      : step === 3
-                        ? "Set date and add notes"
-                        : "Assign to a team member"}
-              </div>
+              <div className="text-white/70 text-sm mt-0.5">{stepDesc}</div>
             </div>
             <button
               onClick={onClose}
@@ -438,7 +530,7 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
             <>
               <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 text-sm text-indigo-700">
                 <strong>Note:</strong> Choose the type of interaction you want
-                to schedule with your lead.
+                to schedule.
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-2">
@@ -476,8 +568,7 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
                             {type}
                           </div>
                           <div className="text-xs text-gray-400 mt-0.5">
-                            {type === "Call" &&
-                              "Schedule a phone call with the lead"}
+                            {type === "Call" && "Schedule a phone call"}
                             {type === "Meeting" &&
                               "Set up an in-person or virtual meeting"}
                             {type === "Visit" && "Plan a property site visit"}
@@ -498,12 +589,17 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
             </>
           )}
 
-          {/* STEP 2 — Lead */}
+          {/* STEP 2 — Lead (Optional) */}
           {step === 2 && (
             <>
+              <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-sm text-amber-700">
+                <strong>Optional:</strong> Link this task to a lead, or skip to
+                create a standalone task.
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                  Lead <span className="text-red-500">*</span>
+                  Lead{" "}
+                  <span className="text-gray-400 font-normal">(optional)</span>
                 </label>
                 <SearchableDropdown
                   label="Lead"
@@ -545,7 +641,8 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
                   )}
                 />
               </div>
-              {form.lead && (
+
+              {form.lead ? (
                 <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-1.5">
                   <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider">
                     Selected Lead
@@ -579,6 +676,20 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
                       </span>
                     </div>
                   )}
+                </div>
+              ) : (
+                <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-gray-200 flex items-center justify-center shrink-0">
+                    <FileText size={16} className="text-gray-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-600">
+                      Standalone Task
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      This task won't be linked to any lead
+                    </p>
+                  </div>
                 </div>
               )}
             </>
@@ -637,7 +748,7 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
             </>
           )}
 
-          {/* STEP 4 — Assign & Summary — ✅ hidden for DEALER_USER */}
+          {/* STEP 4 — Assign & Summary — DEALER only */}
           {step === 4 && !isDealer_User && (
             <>
               <div>
@@ -648,7 +759,6 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
                 <SearchableDropdown
                   label="Team member"
                   placeholder="Assign to a team member..."
-                  // ✅ users already fetched with correct dealer_id
                   items={users.filter((u) => u.is_active)}
                   value={form.assignedTo}
                   onChange={(v) => set("assignedTo", v)}
@@ -693,7 +803,10 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
                     value: form.type,
                     icon: TYPE_CONFIG[form.type]?.icon,
                   },
-                  { label: "Lead", value: form.lead?.name || "—" },
+                  {
+                    label: "Lead",
+                    value: form.lead?.name || "No lead (standalone)",
+                  },
                   {
                     label: "Date",
                     value: form.date ? fmtDate(form.date) : "—",
@@ -710,7 +823,13 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
                     <span className="text-xs text-gray-400 font-semibold">
                       {label}
                     </span>
-                    <span className="text-xs font-semibold text-gray-800 flex items-center gap-1.5">
+                    <span
+                      className={`text-xs font-semibold flex items-center gap-1.5 ${
+                        label === "Lead" && !form.lead
+                          ? "text-gray-400 italic"
+                          : "text-gray-800"
+                      }`}
+                    >
                       {SIcon && <SIcon size={11} className="text-indigo-400" />}
                       {value}
                     </span>
@@ -747,7 +866,6 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
           >
             {step > 1 ? "← Back" : "Cancel"}
           </button>
-          {/* ✅ Use MAX_STEP to control Continue vs Submit */}
           {step < MAX_STEP ? (
             <button
               type="button"
@@ -783,52 +901,57 @@ const TaskPanel = ({ onClose, onSave, editTask, leads, users }) => {
   );
 };
 
-/* ─── TASK CARD ────────────────────────────────────────────────────────────── */
-const TaskCard = ({ task, onToggle, onEdit, onDelete }) => {
+/* ─── TASK CARD ─────────────────────────────────────────────────────────────── */
+const TaskCard = ({ task, onStatusChange, onEdit, onDelete, updatingId }) => {
   const daysLeft = daysDiff(task.date);
-  const isOverdue = daysLeft < 0 && !task.done;
+  const currentStatus = task.status || (task.done ? "completed" : "pending");
+  const isOverdue = daysLeft < 0 && currentStatus !== "completed";
   const tc = TYPE_CONFIG[task.type] ?? TYPE_CONFIG.Call;
   const Icon = tc.icon;
-
-  const leadName = getLeadName(task);
+  const hasLead = !!task.lead;
   const leadPhone = getLeadPhone(task);
   const propName = getLeadProp(task);
 
   return (
     <div
       className={`group bg-white rounded-2xl border-2 transition-all duration-200 hover:shadow-md ${
-        task.done
-          ? "border-gray-100 opacity-55"
+        currentStatus === "completed"
+          ? "border-gray-100 opacity-60"
           : isOverdue
             ? "border-red-200 bg-red-50/20"
-            : "border-gray-100 hover:border-gray-200"
+            : currentStatus === "in_progress"
+              ? "border-blue-200 bg-blue-50/10"
+              : "border-gray-100 hover:border-gray-200"
       }`}
     >
       <div className="p-4 flex items-start gap-4">
-        {/* Checkbox */}
-        <button
-          onClick={() => onToggle(task)}
-          className={`mt-0.5 w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all ${
-            task.done
-              ? "bg-emerald-500 border-emerald-500"
-              : "border-gray-300 hover:border-indigo-400 hover:bg-indigo-50"
-          }`}
-        >
-          {task.done && <CheckCircle size={14} className="text-white" />}
-        </button>
+        {/* Status Button */}
+        <div className="mt-0.5 shrink-0">
+          <StatusButton
+            status={currentStatus}
+            disabled={updatingId === task.id}
+            onClick={(newStatus) => onStatusChange(task, newStatus)}
+          />
+        </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center flex-wrap gap-2 mb-1">
             <span
-              className={`font-bold text-sm text-gray-900 ${task.done ? "line-through text-gray-400" : ""}`}
+              className={`font-bold text-sm ${
+                currentStatus === "completed"
+                  ? "line-through text-gray-400"
+                  : "text-gray-900"
+              }`}
             >
-              {leadName}
+              {hasLead ? getLeadName(task) : "Standalone Task"}
             </span>
+
             <span
               className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full ${tc.bg} ${tc.text}`}
             >
               <Icon size={10} /> {task.type}
             </span>
+
             {isOverdue && (
               <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600">
                 <AlertTriangle size={10} /> {Math.abs(daysLeft)}d overdue
@@ -836,18 +959,27 @@ const TaskCard = ({ task, onToggle, onEdit, onDelete }) => {
             )}
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
-            {leadPhone !== "—" && (
-              <span className="flex items-center gap-1">
-                <Phone size={10} /> {leadPhone}
-              </span>
-            )}
-            {propName && (
-              <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full truncate max-w-[120px]">
-                {propName}
-              </span>
-            )}
-          </div>
+          {hasLead && (leadPhone || propName) && (
+            <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
+              {leadPhone && (
+                <span className="flex items-center gap-1">
+                  <Phone size={10} /> {leadPhone}
+                </span>
+              )}
+              {propName && (
+                <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full truncate max-w-[120px]">
+                  {propName}
+                </span>
+              )}
+            </div>
+          )}
+
+          {!hasLead && (
+            <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-0.5">
+              <FileText size={10} />
+              <span>No lead linked</span>
+            </div>
+          )}
 
           {task.note && (
             <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
@@ -869,10 +1001,10 @@ const TaskCard = ({ task, onToggle, onEdit, onDelete }) => {
           )}
         </div>
 
-        {/* Date + action buttons */}
+        {/* Date + actions */}
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           <div className="text-xs text-gray-400">{fmtDate(task.date)}</div>
-          {!task.done && daysLeft >= 0 && daysLeft <= 7 && (
+          {currentStatus !== "completed" && daysLeft >= 0 && daysLeft <= 7 && (
             <div
               className={`text-xs font-bold ${daysLeft === 0 ? "text-orange-500" : "text-indigo-500"}`}
             >
@@ -900,21 +1032,26 @@ const TaskCard = ({ task, onToggle, onEdit, onDelete }) => {
         className={`h-0.5 rounded-b-2xl ${
           isOverdue
             ? "bg-red-200"
-            : task.done
-              ? "bg-gray-100"
-              : task.type === "Call"
-                ? "bg-gradient-to-r from-blue-200 to-indigo-200"
-                : task.type === "Meeting"
-                  ? "bg-gradient-to-r from-violet-200 to-purple-200"
-                  : "bg-gradient-to-r from-emerald-200 to-teal-200"
+            : currentStatus === "completed"
+              ? "bg-emerald-200"
+              : currentStatus === "in_progress"
+                ? "bg-blue-200"
+                : task.type === "Call"
+                  ? "bg-gradient-to-r from-blue-200 to-indigo-200"
+                  : task.type === "Meeting"
+                    ? "bg-gradient-to-r from-violet-200 to-purple-200"
+                    : "bg-gradient-to-r from-emerald-200 to-teal-200"
         }`}
       />
     </div>
   );
 };
 
-/* ─── MAIN ─────────────────────────────────────────────────────────────────── */
+/* ─── MAIN ──────────────────────────────────────────────────────────────────── */
 const TaskFollowups = () => {
+  const authUser = getAuthUser();
+  const isDealer_User = authUser.role === "DEALER_USER";
+
   const [tasks, setTasks] = useState([]);
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
@@ -924,23 +1061,12 @@ const TaskFollowups = () => {
   const [editTask, setEditTask] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [togglingId, setTogglingId] = useState(null);
+  const [updatingId, setUpdatingId] = useState(null);
 
   const fetchTasks = async () => {
     try {
-      const authUser = getAuthUser();
-      const params = {};
-
-      if (authUser.role === "DEALER") {
-        // DEALER sees all tasks under their dealer_id
-        params.dealer_id = getDealerId();
-      } else if (authUser.role === "DEALER_USER") {
-        // DEALER_USER only sees tasks assigned to them
-        // ✅ Backend filters by assigned_to
-        params.dealer_id = getDealerId(); // still needed for security scope
-        params.assigned_to = authUser.id;
-      }
-
+      const params = { dealer_id: getDealerId() };
+      if (isDealer_User) params.assigned_to = authUser.id;
       const res = await axios.get(`${BASE_URL}/tasks/`, { params });
       setTasks(res.data.data || []);
     } catch (err) {
@@ -949,21 +1075,20 @@ const TaskFollowups = () => {
   };
 
   useEffect(() => {
-    const authUser = getAuthUser();
-
     const fetchLeads = async () => {
       try {
-        // ✅ getDealerId() returns correct dealer ID for both roles
-        const res = await axios.get(`${BASE_URL}/leads/`, {
-          params: { dealer_id: getDealerId() },
-        });
+        const params = { dealer_id: getDealerId() };
+        if (isDealer_User) {
+          params.assigned_to = authUser.id;
+          params.include_unassigned = true;
+        }
+        const res = await axios.get(`${BASE_URL}/leads/`, { params });
         setLeads(res.data.data || []);
       } catch {}
     };
 
     const fetchUsers = async () => {
       try {
-        // ✅ getDealerId() returns correct dealer ID for both roles
         const res = await axios.get(`${BASE_URL}/auth/dealer-users`, {
           params: { dealer_id: getDealerId() },
         });
@@ -998,23 +1123,24 @@ const TaskFollowups = () => {
     });
   };
 
-  const toggleDone = async (task) => {
-    const newDone = !task.done;
-    setTogglingId(task.id);
+  const handleStatusChange = async (task, newStatus) => {
+    setUpdatingId(task.id);
+    // ✅ Optimistic update
     setTasks((prev) =>
-      prev.map((t) => (t.id === task.id ? { ...t, done: newDone } : t)),
+      prev.map((t) => (t.id === task.id ? { ...t, status: newStatus } : t)),
     );
     try {
       await axios.patch(`${BASE_URL}/tasks/${task.id}`, {
-        dealer_id: getDealerId(), // ✅ correct for both roles
-        done: newDone,
+        dealer_id: getDealerId(),
+        status: newStatus, // ✅ only status — done field removed
       });
     } catch {
+      // ✅ Revert on failure
       setTasks((prev) =>
-        prev.map((t) => (t.id === task.id ? { ...t, done: task.done } : t)),
+        prev.map((t) => (t.id === task.id ? { ...t, status: task.status } : t)),
       );
     } finally {
-      setTogglingId(null);
+      setUpdatingId(null);
     }
   };
 
@@ -1023,7 +1149,7 @@ const TaskFollowups = () => {
     setDeleteLoading(true);
     try {
       await axios.delete(`${BASE_URL}/tasks/${deleteTarget.id}`, {
-        data: { dealer_id: getDealerId() }, // ✅ correct for both roles
+        data: { dealer_id: getDealerId() },
       });
       setTasks((prev) => prev.filter((t) => t.id !== deleteTarget.id));
       setDeleteTarget(null);
@@ -1034,22 +1160,31 @@ const TaskFollowups = () => {
     }
   };
 
-  const pending = tasks.filter((t) => !t.done);
-  const completed = tasks.filter((t) => t.done);
-  const overdue = pending.filter((t) => daysDiff(t.date) < 0);
+  // ✅ status is now single source of truth — no done fallback needed for new records
+  // keeping old done fallback only for any legacy records that may exist in DB
+  const getStatus = (t) => t.status || "pending";
 
+  const pending = tasks.filter((t) => getStatus(t) === "pending");
+  const inProgress = tasks.filter((t) => getStatus(t) === "in_progress");
+  const completed = tasks.filter((t) => getStatus(t) === "completed");
+  const overdue = [...pending, ...inProgress].filter(
+    (t) => daysDiff(t.date) < 0,
+  );
   const displayed =
     filter === "Pending"
       ? pending
-      : filter === "Completed"
-        ? completed
+      : filter === "In Progress"
+        ? inProgress
         : filter === "Overdue"
           ? overdue
-          : tasks;
+          : filter === "Completed"
+            ? completed
+            : tasks;
 
   const FILTERS = [
     { key: "All", count: tasks.length },
     { key: "Pending", count: pending.length },
+    { key: "In Progress", count: inProgress.length },
     { key: "Overdue", count: overdue.length, danger: true },
     { key: "Completed", count: completed.length },
   ];
@@ -1075,33 +1210,56 @@ const TaskFollowups = () => {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           {
+            key: "Pending",
             label: "Pending",
             count: pending.length,
-            gradient: "from-blue-500 to-indigo-600",
-            icon: Clock,
-            sub: "follow-ups",
+            gradient: "from-gray-500 to-gray-600",
+            icon: CircleDashed,
+            sub: "not started",
+            subDanger: false,
           },
           {
+            key: "In Progress",
+            label: "In Progress",
+            count: inProgress.length,
+            gradient: "from-blue-500 to-indigo-600",
+            icon: PlayCircle,
+            sub: "being worked on",
+            subDanger: false,
+          },
+          {
+            key: "Overdue",
             label: "Overdue",
             count: overdue.length,
-            gradient: "from-red-500 to-rose-600",
+            gradient:
+              overdue.length > 0
+                ? "from-red-500 to-rose-600"
+                : "from-gray-400 to-gray-500",
             icon: AlertTriangle,
-            sub: "need attention",
+            sub: overdue.length > 0 ? "need attention" : "all on track",
+            subDanger: overdue.length > 0,
           },
           {
+            key: "Completed",
             label: "Completed",
             count: completed.length,
             gradient: "from-emerald-500 to-teal-600",
             icon: CheckCircle,
-            sub: "this period",
+            sub: "done",
+            subDanger: false,
           },
-        ].map(({ label, count, gradient, icon: Icon, sub }) => (
+        ].map(({ key, label, count, gradient, icon: Icon, sub, subDanger }) => (
           <div
-            key={label}
-            className={`relative overflow-hidden bg-gradient-to-br ${gradient} rounded-2xl p-5 text-white shadow-md`}
+            key={key}
+            onClick={() => setFilter(key)}
+            className={`relative overflow-hidden bg-gradient-to-br ${gradient} rounded-2xl p-5 text-white shadow-md cursor-pointer transition hover:opacity-90 ${
+              filter === key
+                ? "ring-2 ring-white/60 ring-offset-2 ring-offset-gray-100"
+                : ""
+            }`}
           >
             <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full bg-white/10" />
             <Icon size={20} className="opacity-80 mb-3" />
@@ -1109,12 +1267,75 @@ const TaskFollowups = () => {
             <div className="text-white/80 text-sm font-semibold mt-1">
               {label}
             </div>
-            <div className="text-white/50 text-xs">{sub}</div>
+            <div
+              className={`text-xs mt-0.5 ${subDanger ? "text-red-200 font-semibold" : "text-white/50"}`}
+            >
+              {sub}
+            </div>
           </div>
         ))}
       </div>
 
-      {/* Filters */}
+      {/* Overdue banner — shown when overdue tasks exist and not already on overdue filter */}
+      {overdue.length > 0 && filter !== "Overdue" && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={16} className="text-red-500 shrink-0" />
+              <span className="text-sm font-semibold text-red-700">
+                {overdue.length} overdue task{overdue.length > 1 ? "s" : ""}{" "}
+                need attention
+              </span>
+            </div>
+            <button
+              onClick={() => setFilter("Overdue")}
+              className="text-xs font-semibold text-red-600 underline hover:text-red-700 shrink-0"
+            >
+              View All
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            {overdue.slice(0, 3).map((t) => (
+              <div
+                key={t.id}
+                className="flex items-center justify-between bg-red-100/50 rounded-xl px-3 py-2"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div
+                    className={`w-2 h-2 rounded-full shrink-0 ${STATUS_CONFIG[getStatus(t)]?.dot || "bg-gray-400"}`}
+                  />
+                  <span className="text-xs font-semibold text-red-700 truncate">
+                    {t.lead ? getLeadName(t) : "Standalone Task"}
+                  </span>
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${TYPE_CONFIG[t.type]?.bg} ${TYPE_CONFIG[t.type]?.text}`}
+                  >
+                    {t.type}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <span className="text-xs font-bold text-red-500">
+                    {Math.abs(daysDiff(t.date))}d overdue
+                  </span>
+                  <span className="text-[10px] text-red-400">
+                    due {fmtDate(t.date)}
+                  </span>
+                </div>
+              </div>
+            ))}
+            {overdue.length > 3 && (
+              <button
+                onClick={() => setFilter("Overdue")}
+                className="text-xs text-red-500 font-semibold hover:underline pl-1"
+              >
+                +{overdue.length - 3} more overdue tasks — view all
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Filter tabs */}
       <div className="flex gap-2 flex-wrap">
         {FILTERS.map(({ key, count, danger }) => (
           <button
@@ -1125,12 +1346,21 @@ const TaskFollowups = () => {
                 ? danger && count > 0
                   ? "bg-red-500 text-white border-red-500"
                   : "bg-indigo-600 text-white border-indigo-600"
-                : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                : danger && count > 0
+                  ? "bg-white text-red-500 border-red-200 hover:bg-red-50"
+                  : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
             }`}
           >
+            {danger && count > 0 && <AlertTriangle size={13} />}
             {key}
             <span
-              className={`text-xs ${filter === key ? "text-white/75" : "text-gray-400"}`}
+              className={`text-xs ${
+                filter === key
+                  ? "text-white/75"
+                  : danger && count > 0
+                    ? "text-red-400"
+                    : "text-gray-400"
+              }`}
             >
               ({count})
             </span>
@@ -1147,7 +1377,7 @@ const TaskFollowups = () => {
               className="bg-white rounded-2xl border border-gray-100 p-4 animate-pulse"
             >
               <div className="flex gap-4">
-                <div className="w-6 h-6 rounded-lg bg-gray-200 shrink-0" />
+                <div className="w-24 h-7 rounded-lg bg-gray-200 shrink-0" />
                 <div className="flex-1 space-y-2">
                   <div className="h-3 bg-gray-200 rounded w-1/3" />
                   <div className="h-2 bg-gray-100 rounded w-2/3" />
@@ -1174,9 +1404,10 @@ const TaskFollowups = () => {
             <TaskCard
               key={task.id}
               task={task}
-              onToggle={toggleDone}
+              onStatusChange={handleStatusChange}
               onEdit={openEdit}
               onDelete={setDeleteTarget}
+              updatingId={updatingId}
             />
           ))}
         </div>

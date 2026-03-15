@@ -1,6 +1,17 @@
 // src/pages/mockData.js
 // Central mock data store for the entire CRM system
 
+export const bhkOptions = [
+  "Studio",
+  "1 BHK",
+  "2 BHK",
+  "3 BHK",
+  "4 BHK",
+  "5 BHK",
+  "Duplex",
+  "Simplex",
+];
+
 /* ─── PLANS ──────────────────────────────────────────────────────────────────── */
 export const PLAN_CONFIG = {
   BASIC: {

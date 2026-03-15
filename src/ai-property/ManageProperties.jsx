@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { BASE_URL } from "./config";
 import { PageHeader } from "./SharedComponents";
+import { bhkOptions } from "./mockData";
 
 export default function ManageProperties() {
   const [properties, setProperties] = useState([]);
@@ -51,8 +52,6 @@ export default function ManageProperties() {
     "Parking",
     "Elevator",
   ];
-
-  const bhkOptions = ["1 BHK", "2 BHK", "3 BHK", "4 BHK", "5 BHK", "Penthouse"];
 
   const possessionOptions = [
     "Ready to Move",

@@ -18,6 +18,7 @@ import { useState, useEffect, useRef } from "react";
 import { toast } from "react-toastify";
 import { BASE_URL } from "./config";
 import { PageHeader } from "./SharedComponents";
+import { bhkOptions } from "./mockData";
 
 /* ─── AUTH HELPERS ─────────────────────────────────────────────────────── */
 const getAuthUser = () => JSON.parse(localStorage.getItem("auth_user")) || {};
@@ -41,9 +42,6 @@ const MONTH_NAMES = [
   "Nov",
   "Dec",
 ];
-
-// Format to backend-compatible string e.g. "Mar 2026" or "Ready to Move"
-const formatPossession = (val) => val; // already stored as string
 
 /* ─── MONTH/YEAR PICKER ─────────────────────────────────────────────────── */
 function MonthYearPicker({ value, onChange, error }) {
@@ -227,8 +225,6 @@ export default function AddPropertyForm() {
     "Parking",
     "Elevator",
   ];
-
-  const bhkOptions = ["1 BHK", "2 BHK", "3 BHK", "4 BHK", "5 BHK", "Penthouse"];
 
   useEffect(() => {
     try {

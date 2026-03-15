@@ -25,21 +25,16 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  Eye,
+  EyeOff,
 } from "lucide-react";
-import {
-  PageHeader,
-  StageBadge,
-  SourceBadge,
-  EmptyState,
-} from "./SharedComponents";
+import { PageHeader, StageBadge, EmptyState } from "./SharedComponents";
 import { BASE_URL } from "./config";
-import { LEAD_STAGES, STAGE_COLORS, LEAD_SOURCES } from "./mockData";
+import { LEAD_STAGES, STAGE_COLORS } from "./mockData";
 
 /* ─── AUTH HELPERS ─────────────────────────────────────────────────────────── */
 const getAuthUser = () => JSON.parse(localStorage.getItem("auth_user")) || {};
 
-// DEALER      → their own id IS the dealer_id
-// DEALER_USER → belongs to a dealer, use dealer_id field
 const getDealerId = () => {
   const authUser = getAuthUser();
   return authUser.role === "DEALER_USER"
@@ -51,11 +46,103 @@ const inputCls =
   "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none " +
   "focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition bg-gray-50 focus:bg-white";
 
+/* ─── PHONE MASKING HELPERS ─────────────────────────────────────────────────── */
+// Industry standard: show first 2 + last 2 digits, mask middle
+// e.g. 9876543210 → 98 •••••• 10
+const maskPhone = (phone) => {
+  if (!phone) return "—";
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 6) return phone; // too short to mask
+  const first = digits.slice(0, 2);
+  const last = digits.slice(-2);
+  const masked = "•".repeat(digits.length - 4);
+  return `${first} ${masked} ${last}`;
+};
+
+/* ─── PHONE CELL COMPONENT ──────────────────────────────────────────────────── */
+// Handles masking + reveal + tap-to-call in one reusable component
+const PhoneCell = ({ phone, className = "" }) => {
+  const [revealed, setRevealed] = useState(false);
+
+  if (!phone) return <span className="text-gray-300">—</span>;
+
+  return (
+    <div
+      className={"flex items-center gap-1.5 " + className}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Number — masked or revealed */}
+      <span className="text-gray-600 text-sm font-mono whitespace-nowrap">
+        {revealed ? phone : maskPhone(phone)}
+      </span>
+
+      {/* ✅ Eye icon — always visible, not hover-dependent */}
+      <button
+        onClick={() => setRevealed((r) => !r)}
+        className="p-1 rounded-lg text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 transition shrink-0"
+        title={revealed ? "Hide number" : "Reveal number"}
+      >
+        {revealed ? <EyeOff size={12} /> : <Eye size={12} />}
+      </button>
+
+      {/* ✅ Call button — always visible when revealed */}
+      {revealed && (
+        <a
+          href={"tel:" + phone.replace(/\D/g, "")}
+          className="flex items-center gap-1 p-1 rounded-lg text-gray-300 hover:text-emerald-600 hover:bg-emerald-50 transition shrink-0"
+          title={"Call " + phone}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Phone size={12} />
+        </a>
+      )}
+    </div>
+  );
+};
+
+/* ─── PHONE INPUT WITH CALL BUTTON ──────────────────────────────────────────── */
+// Used in detail panel — editable input + call button when has value
+const PhoneInput = ({ value, disabled, onChange, placeholder }) => (
+  <div className="relative">
+    <Phone
+      size={15}
+      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+    />
+    <input
+      className={`${inputCls} pl-9 ${value && !disabled ? "pr-12" : ""}`}
+      value={value}
+      disabled={disabled}
+      onChange={onChange}
+      placeholder={placeholder || "9876543210"}
+    />
+    {/* Tap to call button — shown only when has value and not in edit mode */}
+    {value && disabled && (
+      <a
+        href={"tel:" + value.replace(/\D/g, "")}
+        title={"Call " + value}
+        className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 text-[10px] font-semibold hover:bg-emerald-100 transition"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Phone size={10} /> Call
+      </a>
+    )}
+    {value && !disabled && (
+      <a
+        href={`tel:${value.replace(/\D/g, "")}`}
+        className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 text-[10px] font-semibold hover:bg-emerald-100 transition"
+        title={`Call ${value}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Phone size={10} /> Call
+      </a>
+    )}
+  </div>
+);
+
 // ── Shared hook: active DEALER_USERs ─────────────────────────────────────────
 const useDealerUsers = () => {
   const [users, setUsers] = useState([]);
   useEffect(() => {
-    // ✅ getDealerId() returns correct dealer ID for both roles
     axios
       .get(`${BASE_URL}/auth/dealer-users`, {
         params: { dealer_id: getDealerId() },
@@ -74,7 +161,6 @@ const useProperties = () => {
   useEffect(() => {
     const fetchProperties = async () => {
       try {
-        // ✅ getDealerId() returns correct dealer ID for both roles
         const response = await axios.get(`${BASE_URL}/properties/list`, {
           params: { dealer_id: getDealerId() },
         });
@@ -97,7 +183,7 @@ const useProperties = () => {
 /* ── Sample Excel download ───────────────────────────────────────────────────── */
 const downloadSampleExcel = () => {
   const ws = XLSX.utils.aoa_to_sheet([
-    ["name", "phone", "email", "property", "budget", "location", "source"],
+    ["name", "phone", "email", "property", "budget", "location"],
     [
       "Rahul Verma",
       "9876543210",
@@ -105,28 +191,11 @@ const downloadSampleExcel = () => {
       "Skyline Apartments",
       "5000000",
       "Noida",
-      "Import",
     ],
-    [
-      "Sneha Gupta",
-      "9811223344",
-      "",
-      "Green Valley Villas",
-      "",
-      "Delhi",
-      "Import",
-    ],
-    [
-      "Arjun Patel",
-      "9900112233",
-      "arjun@email.com",
-      "",
-      "3500000",
-      "Mumbai",
-      "Import",
-    ],
+    ["Sneha Gupta", "9811223344", "", "Green Valley Villas", "", "Delhi"],
+    ["Arjun Patel", "9900112233", "arjun@email.com", "", "3500000", "Mumbai"],
   ]);
-  ws["!cols"] = [18, 14, 24, 28, 12, 12, 10].map((w) => ({ wch: w }));
+  ws["!cols"] = [18, 14, 24, 28, 12, 12].map((w) => ({ wch: w }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Leads");
   XLSX.writeFile(wb, "lead_import_sample.xlsx");
@@ -154,8 +223,6 @@ const ImportPanel = ({ onClose, onImported }) => {
         const wb = XLSX.read(evt.target.result, { type: "binary" });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
-        console.log("Raw row keys:", Object.keys(rows[0])); // <-- add this
-        console.log("First row:", rows[0]);
         if (rows.length === 0) {
           setError("File is empty or has no data rows.");
           return;
@@ -164,7 +231,6 @@ const ImportPanel = ({ onClose, onImported }) => {
           setError("Maximum 5000 rows allowed per import.");
           return;
         }
-
         const normalized = rows.map((r) => {
           const out = {};
           Object.entries(r).forEach(([k, v]) => {
@@ -185,7 +251,7 @@ const ImportPanel = ({ onClose, onImported }) => {
     setError("");
     try {
       const { data } = await axios.post(`${BASE_URL}/leads/bulk`, {
-        dealer_id: getDealerId(), // ✅ correct dealer ID for both roles
+        dealer_id: getDealerId(),
         leads: preview,
       });
       setResult(data);
@@ -252,7 +318,6 @@ const ImportPanel = ({ onClose, onImported }) => {
                 { col: "property", req: false },
                 { col: "budget", req: false },
                 { col: "location", req: false },
-                { col: "source", req: false },
               ].map(({ col, req }) => (
                 <span
                   key={col}
@@ -319,7 +384,7 @@ const ImportPanel = ({ onClose, onImported }) => {
                           "Phone",
                           "Property",
                           "Budget",
-                          "Source",
+                          "Location",
                         ].map((h) => (
                           <th
                             key={h}
@@ -342,8 +407,10 @@ const ImportPanel = ({ onClose, onImported }) => {
                               <span className="text-red-400">Missing</span>
                             )}
                           </td>
-                          <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap">
-                            {row.phone || (
+                          <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap font-mono">
+                            {row.phone ? (
+                              maskPhone(row.phone)
+                            ) : (
                               <span className="text-red-400">Missing</span>
                             )}
                           </td>
@@ -354,7 +421,7 @@ const ImportPanel = ({ onClose, onImported }) => {
                             {row.budget || "—"}
                           </td>
                           <td className="px-3 py-1.5 text-gray-500">
-                            {row.source || "—"}
+                            {row.location || "—"}
                           </td>
                         </tr>
                       ))}
@@ -410,7 +477,7 @@ const ImportPanel = ({ onClose, onImported }) => {
                               {s.row}
                             </td>
                             <td className="px-3 py-1.5 text-gray-600 font-mono">
-                              {s.phone}
+                              {maskPhone(s.phone)}
                             </td>
                             <td className="px-3 py-1.5 text-red-500">
                               {s.reason}
@@ -462,7 +529,6 @@ const INIT_FORM = {
   property_id: "",
   budget: "",
   location: "",
-  source: "Manual",
   assigned_to: "",
 };
 
@@ -472,12 +538,10 @@ const AddLeadPanel = ({ onClose, onSave }) => {
 
   const [form, setForm] = useState({
     ...INIT_FORM,
-    // ✅ DEALER_USER: pre-assign to themselves
     assigned_to: isDealer_User ? authUser.id : "",
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  // ✅ Only needed for DEALER (to show assign dropdown)
   const dealerUsers = useDealerUsers();
   const { properties, loading: propertiesLoading } = useProperties();
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
@@ -488,7 +552,6 @@ const AddLeadPanel = ({ onClose, onSave }) => {
       setError("Name and phone number are required.");
       return;
     }
-    // For DEALER_USER, assigned user is themselves
     const assignedUser = isDealer_User
       ? { id: authUser.id, name: authUser.name }
       : dealerUsers.find((u) => u.id === form.assigned_to);
@@ -505,8 +568,7 @@ const AddLeadPanel = ({ onClose, onSave }) => {
         property_id: form.property_id || null,
         budget: form.budget ? Number(form.budget) : null,
         location: form.location.trim() || selectedProperty?.location || null,
-        source: form.source,
-        // ✅ DEALER_USER always assigned to themselves
+        source: "Manual",
         assigned_to: isDealer_User ? authUser.id : form.assigned_to || null,
         assigned_name: isDealer_User
           ? authUser.name
@@ -573,6 +635,7 @@ const AddLeadPanel = ({ onClose, onSave }) => {
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">
               Phone Number <span className="text-red-500">*</span>
             </label>
+            {/* ✅ Plain input in Add form — no masking since user is typing */}
             <div className="relative">
               <Phone
                 size={15}
@@ -668,22 +731,6 @@ const AddLeadPanel = ({ onClose, onSave }) => {
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-              Source
-            </label>
-            <select
-              value={form.source}
-              onChange={(e) => set("source", e.target.value)}
-              className={inputCls}
-            >
-              {LEAD_SOURCES.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* ✅ Assign To — hidden for DEALER_USER (auto-assigned to themselves) */}
           {!isDealer_User && (
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">
@@ -763,6 +810,225 @@ const NotesHistory = ({ notes }) => {
   );
 };
 
+/* ── Lead Tasks Section ──────────────────────────────────────────────────────── */
+const LeadTasks = ({ leadId }) => {
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAll, setShowAll] = useState(false);
+
+  const PREVIEW_COUNT = 3;
+
+  useEffect(() => {
+    if (!leadId) return;
+    axios
+      .get(`${BASE_URL}/tasks/`, {
+        params: { dealer_id: getDealerId(), lead_id: leadId },
+      })
+      .then((res) => setTasks(res.data.data || []))
+      .catch(() => setTasks([]))
+      .finally(() => setLoading(false));
+  }, [leadId]);
+
+  const getStatus = (t) => t.status || "pending";
+
+  const STATUS_STYLE = {
+    pending: { bg: "bg-gray-100", text: "text-gray-500", label: "Pending" },
+    in_progress: {
+      bg: "bg-blue-100",
+      text: "text-blue-600",
+      label: "In Progress",
+    },
+    completed: {
+      bg: "bg-emerald-100",
+      text: "text-emerald-700",
+      label: "Completed",
+    },
+  };
+
+  const TYPE_ICON = {
+    Call: "📞",
+    Meeting: "🤝",
+    Visit: "🏠",
+    Other: "📝",
+  };
+
+  const fmtDate = (d) =>
+    new Date(d).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+
+  const daysDiff = (dateStr) =>
+    Math.ceil(
+      (new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+    );
+
+  if (loading) {
+    return (
+      <div className="space-y-2">
+        {[...Array(2)].map((_, i) => (
+          <div key={i} className="animate-pulse bg-gray-100 rounded-xl h-14" />
+        ))}
+      </div>
+    );
+  }
+
+  if (tasks.length === 0) {
+    return (
+      <div className="text-center py-4 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+        <p className="text-xs text-gray-400 font-medium">
+          No tasks linked to this lead
+        </p>
+        <p className="text-[11px] text-gray-300 mt-0.5">
+          Create tasks from the Tasks & Follow-ups section
+        </p>
+      </div>
+    );
+  }
+
+  // ✅ Sort: non-completed first, then by date ascending (soonest first)
+  const sorted = [...tasks].sort((a, b) => {
+    const aCompleted = getStatus(a) === "completed";
+    const bCompleted = getStatus(b) === "completed";
+    if (aCompleted !== bCompleted) return aCompleted ? 1 : -1;
+    return new Date(a.date) - new Date(b.date);
+  });
+
+  const displayed = showAll ? sorted : sorted.slice(0, PREVIEW_COUNT);
+  const hasMore = sorted.length > PREVIEW_COUNT;
+
+  // ✅ Summary counts
+  const pendingCount = tasks.filter((t) => getStatus(t) === "pending").length;
+  const inProgressCount = tasks.filter(
+    (t) => getStatus(t) === "in_progress",
+  ).length;
+  const overdueCount = tasks.filter((t) => {
+    const s = getStatus(t);
+    return s !== "completed" && daysDiff(t.date) < 0;
+  }).length;
+
+  return (
+    <div className="space-y-2">
+      {/* ✅ Summary bar — quick glance counts */}
+      <div className="flex items-center gap-2 flex-wrap mb-1">
+        <span className="text-[11px] font-semibold text-gray-400">
+          {tasks.length} task{tasks.length > 1 ? "s" : ""}
+        </span>
+        {inProgressCount > 0 && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600">
+            {inProgressCount} in progress
+          </span>
+        )}
+        {pendingCount > 0 && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">
+            {pendingCount} pending
+          </span>
+        )}
+        {overdueCount > 0 && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">
+            ⚠ {overdueCount} overdue
+          </span>
+        )}
+      </div>
+
+      {/* Task list */}
+      {displayed.map((task) => {
+        const status = getStatus(task);
+        const s = STATUS_STYLE[status] || STATUS_STYLE.pending;
+        const daysLeft = daysDiff(task.date);
+        const isOverdue = daysLeft < 0 && status !== "completed";
+
+        return (
+          <div
+            key={task.id}
+            className={
+              "rounded-xl border px-3 py-2.5 flex items-start gap-3 " +
+              (isOverdue
+                ? "bg-red-50 border-red-200"
+                : status === "in_progress"
+                  ? "bg-blue-50/50 border-blue-200"
+                  : status === "completed"
+                    ? "bg-gray-50 border-gray-100 opacity-60"
+                    : "bg-white border-gray-100")
+            }
+          >
+            <span className="text-base shrink-0 mt-0.5">
+              {TYPE_ICON[task.type] || "📝"}
+            </span>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-semibold text-gray-700">
+                  {task.type}
+                </span>
+                <span
+                  className={
+                    "text-[10px] font-bold px-1.5 py-0.5 rounded-full " +
+                    s.bg +
+                    " " +
+                    s.text
+                  }
+                >
+                  {s.label}
+                </span>
+                {isOverdue && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">
+                    {Math.abs(daysLeft)}d overdue
+                  </span>
+                )}
+              </div>
+
+              {task.note && (
+                <p className="text-xs text-gray-400 mt-0.5 truncate">
+                  {task.note}
+                </p>
+              )}
+
+              <div className="flex items-center gap-3 mt-1 flex-wrap">
+                <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                  📅 {fmtDate(task.date)}
+                  {status !== "completed" && daysLeft >= 0 && daysLeft <= 3 && (
+                    <span
+                      className={
+                        daysLeft === 0
+                          ? "text-orange-500 font-semibold"
+                          : "text-indigo-500 font-semibold"
+                      }
+                    >
+                      {daysLeft === 0 ? "· Today" : "· in " + daysLeft + "d"}
+                    </span>
+                  )}
+                </span>
+                {task.assigned_name && (
+                  <span className="text-[11px] text-gray-400">
+                    👤 {task.assigned_name}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* ✅ Show more / Show less toggle */}
+      {hasMore && (
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className="w-full py-2 rounded-xl border border-dashed border-gray-200 text-xs font-semibold text-gray-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50/30 transition"
+        >
+          {showAll
+            ? "Show less"
+            : "Show " +
+              (sorted.length - PREVIEW_COUNT) +
+              " more task" +
+              (sorted.length - PREVIEW_COUNT > 1 ? "s" : "")}
+        </button>
+      )}
+    </div>
+  );
+};
+
 /* ── Lead Detail Panel ───────────────────────────────────────────────────────── */
 const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
   const authUser = getAuthUser();
@@ -791,7 +1057,6 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
   );
   const [editLocation, setEditLocation] = useState(lead.location || "");
 
-  // ✅ DEALER_USER can only edit if lead is assigned to them
   const isAssignedToMe = isDealer_User && lead.assigned_to === authUser.id;
   const isUnassigned = !lead.assigned_to;
   const canEdit = !isDealer_User || isAssignedToMe;
@@ -806,7 +1071,6 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
     editBudget !== (lead.budget ? String(lead.budget) : "") ||
     editLocation.trim() !== (lead.location || "");
 
-  // ✅ DEALER_USER self-assign handler
   const handleSelfAssign = async () => {
     setAssigning(true);
     setError("");
@@ -908,7 +1172,6 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {/* ✅ Delete hidden for DEALER_USER */}
             {!isDealer_User && (
               <button
                 onClick={() => setConfirmDelete(true)}
@@ -927,7 +1190,6 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
           </div>
         </div>
 
-        {/* ✅ "Assign to Me" banner — shown to DEALER_USER only when lead is unassigned */}
         {isDealer_User && isUnassigned && (
           <div className="bg-indigo-50 border-b border-indigo-200 px-5 py-3 flex items-center justify-between gap-3">
             <div>
@@ -953,7 +1215,6 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
           </div>
         )}
 
-        {/* ✅ "Assigned to someone else" banner — read-only notice for DEALER_USER */}
         {isDealer_User && !isUnassigned && !isAssignedToMe && (
           <div className="bg-amber-50 border-b border-amber-200 px-5 py-3">
             <p className="text-sm font-semibold text-amber-800">
@@ -1023,22 +1284,16 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   Phone Number <span className="text-red-500">*</span>
                 </label>
-                <div className="relative">
-                  <Phone
-                    size={15}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-                  <input
-                    className={`${inputCls} pl-9`}
-                    value={editPhone}
-                    disabled={!canEdit}
-                    onChange={(e) => {
-                      setEditPhone(e.target.value);
-                      setSaved(false);
-                    }}
-                    placeholder="9876543210"
-                  />
-                </div>
+                {/* ✅ PhoneInput — editable with tap-to-call button */}
+                <PhoneInput
+                  value={editPhone}
+                  disabled={!canEdit}
+                  onChange={(e) => {
+                    setEditPhone(e.target.value);
+                    setSaved(false);
+                  }}
+                  placeholder="9876543210"
+                />
               </div>
               {lead.contact_email && (
                 <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-xl px-3 py-2.5">
@@ -1176,11 +1431,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
 
           {/* Read-only info */}
           <div className="grid grid-cols-2 gap-3">
-            {[
-              ["Source", lead.source || "—"],
-              ["Created", lead.created_at],
-              ["Last Updated", lead.updated_at],
-            ].map(([k, v]) => (
+            {[["Last Updated", lead.updated_at]].map(([k, v]) => (
               <div key={k} className="bg-gray-50 rounded-xl p-3">
                 <div className="text-xs text-gray-400">{k}</div>
                 <div className="font-semibold text-gray-800 text-sm mt-0.5 truncate">
@@ -1190,6 +1441,23 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
             ))}
           </div>
 
+          {/* Tasks & Follow-ups — only visible when user can edit this lead */}
+          {canEdit && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <StickyNote size={14} className="text-indigo-500" />
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Tasks & Follow-ups
+                  </span>
+                </div>
+                <span className="text-[11px] text-gray-400">
+                  Manage in Tasks section
+                </span>
+              </div>
+              <LeadTasks leadId={lead.id} />
+            </div>
+          )}
           {/* Notes */}
           <div>
             <div className="flex items-center gap-2 mb-3">
@@ -1203,7 +1471,6 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                 </span>
               )}
             </div>
-            {/* ✅ Notes textarea only shown if canEdit */}
             {canEdit && (
               <textarea
                 value={newNote}
@@ -1234,7 +1501,6 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
           >
             Close
           </button>
-          {/* ✅ Update button only shown if canEdit */}
           {canEdit && (
             <button
               onClick={handleUpdate}
@@ -1282,9 +1548,7 @@ const Pagination = ({ total, page, perPage, onPerPageChange, onChange }) => {
         <span className="text-xs text-gray-500">Rows per page:</span>
         <select
           value={perPage}
-          onChange={(e) => {
-            onPerPageChange(Number(e.target.value));
-          }}
+          onChange={(e) => onPerPageChange(Number(e.target.value))}
           className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-700 outline-none focus:border-indigo-400 transition"
         >
           {[10, 25, 50, 100].map((n) => (
@@ -1294,7 +1558,6 @@ const Pagination = ({ total, page, perPage, onPerPageChange, onChange }) => {
           ))}
         </select>
       </div>
-
       <div className="flex items-center gap-2">
         <span className="text-xs text-gray-500">
           {Math.min((page - 1) * perPage + 1, total)}–
@@ -1340,12 +1603,10 @@ const Pagination = ({ total, page, perPage, onPerPageChange, onChange }) => {
 
 const SortIcon = ({ colKey, sortConfig }) => {
   const active = sortConfig.key === colKey;
-
   if (active && sortConfig.dir === "asc")
     return <ArrowUp size={13} className="inline ml-1 text-indigo-600" />;
   if (active && sortConfig.dir === "desc")
     return <ArrowDown size={13} className="inline ml-1 text-indigo-600" />;
-
   return (
     <ArrowUpDown
       size={13}
@@ -1368,14 +1629,13 @@ const LeadManagement = () => {
   const [importOpen, setImportOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [filterStage, setFilterStage] = useState("All");
-  const [filterSource, setFilterSource] = useState("All");
   const [filterAssigned, setFilterAssigned] = useState("All");
   const [page, setPage] = useState(1);
-
-  // ADD this state inside LeadManagement (alongside other useState hooks):
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [sortConfig, setSortConfig] = useState({ key: null, dir: "asc" });
+
   const handleInlineAssign = async (e, lead) => {
-    e.stopPropagation(); // ✅ prevent row click opening the panel
+    e.stopPropagation();
     setAssigningLeadId(lead.id);
     try {
       const res = await axios.patch(`${BASE_URL}/leads/${lead.id}`, {
@@ -1390,12 +1650,11 @@ const LeadManagement = () => {
       setAssigningLeadId(null);
     }
   };
-  // ADD this handler (alongside handleSave, handleUpdated, etc.):
+
   const handlePerPageChange = (n) => {
     setRowsPerPage(n);
     setPage(1);
   };
-  const [sortConfig, setSortConfig] = useState({ key: null, dir: "asc" });
 
   const handleSort = (key) => {
     setSortConfig((prev) =>
@@ -1404,16 +1663,15 @@ const LeadManagement = () => {
         : { key, dir: "asc" },
     );
   };
+
   useEffect(() => {
     const fetchLeads = async () => {
       try {
         const params = { dealer_id: getDealerId() };
-
         if (authUser.role === "DEALER_USER") {
           params.assigned_to = authUser.id;
-          params.include_unassigned = true; // ✅ Lead Management needs unassigned too
+          params.include_unassigned = true;
         }
-
         const res = await axios.get(`${BASE_URL}/leads/`, { params });
         setLeads(res.data.data || []);
         setUnassignedCount(res.data.unassigned_count || 0);
@@ -1437,7 +1695,6 @@ const LeadManagement = () => {
       )
         return false;
       if (filterStage !== "All" && l.stage !== filterStage) return false;
-      if (filterSource !== "All" && l.source !== filterSource) return false;
       if (filterAssigned === "unassigned" && l.assigned_to) return false;
       if (filterAssigned === "assigned" && !l.assigned_to) return false;
       return true;
@@ -1461,9 +1718,8 @@ const LeadManagement = () => {
       if (aVal > bVal) return sortConfig.dir === "asc" ? 1 : -1;
       return 0;
     });
-  }, [leads, search, filterStage, filterSource, filterAssigned, sortConfig]);
+  }, [leads, search, filterStage, filterAssigned, sortConfig]);
 
-  // REPLACE the paginated useMemo:
   const paginated = useMemo(
     () => filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage),
     [filtered, page, rowsPerPage],
@@ -1477,7 +1733,6 @@ const LeadManagement = () => {
       prev.map((l) => (l.id === updatedLead.id ? updatedLead : l)),
     );
     setSelectedLead(updatedLead);
-    // ✅ Works for both DEALER and DEALER_USER now
     setUnassignedCount((c) =>
       updatedLead.assigned_to ? Math.max(0, c - 1) : c,
     );
@@ -1490,10 +1745,8 @@ const LeadManagement = () => {
   };
 
   const hasFilters =
-    search ||
-    filterStage !== "All" ||
-    filterSource !== "All" ||
-    filterAssigned !== "All";
+    search || filterStage !== "All" || filterAssigned !== "All";
+
   return (
     <div className="p-6 space-y-5">
       <PageHeader
@@ -1501,7 +1754,6 @@ const LeadManagement = () => {
         description="Track, filter and convert all your leads"
         action={
           <div className="flex gap-2">
-            {/* ✅ Import button — hidden for DEALER_USER */}
             {!isDealer_User && (
               <button
                 onClick={() => setImportOpen(true)}
@@ -1526,7 +1778,6 @@ const LeadManagement = () => {
         </div>
       )}
 
-      {/* ✅ Unassigned warning — only visible to DEALER */}
       {unassignedCount > 0 && (
         <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
           <AlertTriangle size={18} className="text-amber-500 shrink-0" />
@@ -1536,14 +1787,14 @@ const LeadManagement = () => {
               {unassignedCount > 1 ? "s are" : " is"} not assigned to anyone
             </span>
             <p className="text-xs text-amber-600 mt-0.5">
-              Unassigned leads may not be followed up. Open each lead and assign
-              a team member.
+              {isDealer_User
+                ? 'You can claim unassigned leads by clicking "Assign to Me" in the table.'
+                : "Unassigned leads may not be followed up. Open each lead and assign a team member."}
             </p>
           </div>
           <button
             onClick={() => {
               setFilterStage("All");
-              setFilterSource("All");
               setSearch("");
               resetPage();
             }}
@@ -1581,20 +1832,7 @@ const LeadManagement = () => {
             <option key={s}>{s}</option>
           ))}
         </select>
-        <select
-          value={filterSource}
-          onChange={(e) => {
-            setFilterSource(e.target.value);
-            resetPage();
-          }}
-          className="px-3 py-2 rounded-xl border bg-white text-sm text-gray-700 shadow-sm outline-none"
-        >
-          <option value="All">All Sources</option>
-          {LEAD_SOURCES.map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
-        {/* Only visible to DEALER */}
+
         {!isDealer_User && (
           <select
             value={filterAssigned}
@@ -1611,11 +1849,9 @@ const LeadManagement = () => {
         )}
         {hasFilters && (
           <button
-            // inside Clear button onClick:
             onClick={() => {
               setSearch("");
               setFilterStage("All");
-              setFilterSource("All");
               setFilterAssigned("All");
               resetPage();
             }}
@@ -1651,30 +1887,21 @@ const LeadManagement = () => {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    {/* Lead — sortable */}
                     <th
                       onClick={() => handleSort("lead")}
                       className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition"
                     >
                       Lead <SortIcon colKey="lead" sortConfig={sortConfig} />
                     </th>
-
-                    {/* Phone — static */}
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
                       Phone
                     </th>
-
-                    {/* Property — static */}
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
                       Property
                     </th>
-
-                    {/* Location — static */}
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
                       Location
                     </th>
-
-                    {/* Budget — sortable */}
                     <th
                       onClick={() => handleSort("budget")}
                       className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition"
@@ -1682,13 +1909,9 @@ const LeadManagement = () => {
                       Budget{" "}
                       <SortIcon colKey="budget" sortConfig={sortConfig} />
                     </th>
-
-                    {/* Stage — static */}
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
                       Stage
                     </th>
-
-                    {/* Assigned To — sortable, hidden for DEALER_USER */}
                     {!isDealer_User && (
                       <th
                         onClick={() => handleSort("assigned")}
@@ -1698,8 +1921,6 @@ const LeadManagement = () => {
                         <SortIcon colKey="assigned" sortConfig={sortConfig} />
                       </th>
                     )}
-
-                    {/* Last column — Status for DEALER_USER, empty for DEALER */}
                     {isDealer_User ? (
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
                         Status
@@ -1723,22 +1944,34 @@ const LeadManagement = () => {
                             {(lead.contact_name || "?")[0]}
                           </div>
                           <div>
-                            <span className="font-semibold text-gray-800 whitespace-nowrap">
-                              {lead.contact_name || "—"}
-                            </span>
-                            {lead.notes?.length > 0 && (
-                              <span className="ml-2 inline-flex items-center gap-0.5 text-[10px] text-amber-500 font-semibold">
-                                <StickyNote size={10} />
-                                {lead.notes.length}
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold text-gray-800 whitespace-nowrap">
+                                {lead.contact_name || "—"}
+                              </span>
+                              {lead.notes?.length > 0 && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-500 font-semibold">
+                                  <StickyNote size={10} />
+                                  {lead.notes.length}
+                                </span>
+                              )}
+                            </div>
+                            {/* ✅ Assigned date shown below name */}
+                            {lead.assigned_at ? (
+                              <span className="text-[11px] text-gray-400 whitespace-nowrap">
+                                Assigned {lead.assigned_at}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-gray-300 whitespace-nowrap">
+                                Not assigned
                               </span>
                             )}
                           </div>
                         </div>
                       </td>
 
-                      {/* Phone */}
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                        {lead.contact_phone || "—"}
+                      {/* ✅ Phone — masked with hover reveal + tap-to-call */}
+                      <td className="px-4 py-3">
+                        <PhoneCell phone={lead.contact_phone} />
                       </td>
 
                       {/* Property */}
@@ -1782,14 +2015,13 @@ const LeadManagement = () => {
                         </td>
                       )}
 
-                      {/* Last column — Assign to Me / status for DEALER_USER, chevron for DEALER */}
+                      {/* Status / Assign — DEALER_USER */}
                       {isDealer_User ? (
                         <td
                           className="px-4 py-3"
                           onClick={(e) => e.stopPropagation()}
                         >
                           {!lead.assigned_to ? (
-                            // ✅ Unassigned — show Assign to Me button
                             <button
                               onClick={(e) => handleInlineAssign(e, lead)}
                               disabled={assigningLeadId === lead.id}
@@ -1805,12 +2037,10 @@ const LeadManagement = () => {
                                 : "Assign to Me"}
                             </button>
                           ) : lead.assigned_to === authUser.id ? (
-                            // ✅ Assigned to me — green pill
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold whitespace-nowrap">
                               <CheckCircle2 size={12} /> Mine
                             </span>
                           ) : (
-                            // ✅ Assigned to someone else — gray read-only pill
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gray-100 border border-gray-200 text-gray-400 text-xs font-semibold whitespace-nowrap">
                               <UserCircle size={12} />{" "}
                               {lead.assigned_name || "Assigned"}
