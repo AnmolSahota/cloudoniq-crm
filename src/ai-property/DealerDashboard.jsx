@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
+import * as XLSX from "xlsx";
 import {
   Activity,
   AlertTriangle,
   Calendar,
   CheckCircle,
   Copy,
+  Download,
   ExternalLink,
   Globe,
   TrendingUp,
@@ -16,7 +18,11 @@ import {
   Loader2,
 } from "lucide-react";
 import { PageHeader, StageBadge, StatCard } from "./SharedComponents";
-import { STAGE_COLORS } from "./mockData";
+import {
+  STAGE_COLORS,
+  CALL_FEEDBACK_OPTIONS,
+  CALL_FEEDBACK_COLORS,
+} from "./mockData";
 import { BASE_URL } from "./config";
 
 const getDealerId = () =>
@@ -41,10 +47,44 @@ const getDealerInfo = () => {
 const SITE_BASE_URL =
   process.env.REACT_APP_SITE_BASE_URL || "https://propertyai.in";
 
+// ── Derive FEEDBACK_COLS dynamically from mockData constants ──────────────────
+// Key = option label lowercased + spaces replaced with underscore
+// e.g. "Not Interested" → "not_interested", "Visit Scheduled" → "visit_scheduled"
+const optionToKey = (option) => option.toLowerCase().replace(/\s+/g, "_");
+
+const FEEDBACK_COLS = CALL_FEEDBACK_OPTIONS.map((option) => ({
+  key: optionToKey(option),
+  label: option,
+  color: CALL_FEEDBACK_COLORS[option]?.text || "text-gray-500",
+}));
+
+// ── Excel download — fully dynamic, driven by FEEDBACK_COLS ──────────────────
+const downloadFeedbackReport = (data) => {
+  const rows = data.map((row) => {
+    const out = {
+      "Team Member": row.user_name,
+      "Total Assigned": row.assigned,
+    };
+    FEEDBACK_COLS.forEach((col) => {
+      out[col.label] = row[col.key] ?? 0;
+    });
+    return out;
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws["!cols"] = [
+    { wch: 20 },
+    { wch: 16 },
+    ...FEEDBACK_COLS.map(() => ({ wch: 14 })),
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Call Feedback Report");
+  XLSX.writeFile(wb, "call_feedback_report.xlsx");
+};
+
 /* ─── PUBLIC WEBSITE CARD ────────────────────────────────────────────────────── */
 const WebsiteCard = ({ businessName, slug, city }) => {
   const [copied, setCopied] = useState(false);
-
   const websiteUrl = slug ? `${SITE_BASE_URL}/${slug}` : null;
 
   const handleCopy = () => {
@@ -69,7 +109,6 @@ const WebsiteCard = ({ businessName, slug, city }) => {
             {city && <p className="text-white/60 text-xs mt-0.5">{city}</p>}
           </div>
         </div>
-
         {websiteUrl && (
           <div className="flex items-center gap-2 shrink-0">
             <button
@@ -93,9 +132,8 @@ const WebsiteCard = ({ businessName, slug, city }) => {
           </div>
         )}
       </div>
-
       {websiteUrl ? (
-        <div className="mt-4 bg-white/10 rounded-xl px-4 py-2.5 flex items-center justify-between gap-2">
+        <div className="mt-4 bg-white/10 rounded-xl px-4 py-2.5">
           <span className="text-sm font-mono text-white/90 truncate">
             {websiteUrl}
           </span>
@@ -134,7 +172,6 @@ const DealerDashboard = () => {
             params: { dealer_id: dealerId },
           }),
         ]);
-
         setLeads(leadsRes.data.data || []);
         setVisits(visitsRes.data.data || []);
         setTasks(tasksRes.data.data || []);
@@ -148,7 +185,7 @@ const DealerDashboard = () => {
     fetchData();
   }, []);
 
-  // ── Computed Stats ─────────────────────────────────────────────────────────
+  // ── Computed Stats ──────────────────────────────────────────────────────────
   const totalLeads = leads.length;
   const newLeads = leads.filter((l) => l.stage === "New").length;
   const closedLeads = leads.filter((l) => l.stage === "Closed").length;
@@ -206,6 +243,56 @@ const DealerDashboard = () => {
         .sort((a, b) => b.leads - a.leads),
     [properties, leads, visits],
   );
+
+  // ── Call Feedback report — computed from real leads, grouped by assigned user
+  // Each lead has: assigned_to, assigned_name, call_feedback
+  // Unassigned leads are excluded — no user to attribute to
+  const userFeedbackReport = useMemo(() => {
+    const userMap = {};
+
+    leads.forEach((lead) => {
+      if (!lead.assigned_to) return; // skip unassigned
+
+      const key = lead.assigned_to;
+
+      if (!userMap[key]) {
+        userMap[key] = {
+          user_name: lead.assigned_name || "Unknown",
+          assigned: 0,
+        };
+        // Init all feedback option keys to 0
+        FEEDBACK_COLS.forEach((col) => {
+          userMap[key][col.key] = 0;
+        });
+      }
+
+      userMap[key].assigned += 1;
+
+      // Map call_feedback label → snake_case key
+      // Falls back to "assign" if null/missing (default DB value is "Assign")
+      const feedbackKey = lead.call_feedback
+        ? optionToKey(lead.call_feedback)
+        : "assign";
+
+      if (userMap[key][feedbackKey] !== undefined) {
+        userMap[key][feedbackKey] += 1;
+      }
+    });
+
+    // Sort by total assigned descending
+    return Object.values(userMap).sort((a, b) => b.assigned - a.assigned);
+  }, [leads]);
+
+  // ── Feedback totals row — sum across all users ──────────────────────────────
+  const feedbackTotals = useMemo(() => {
+    const totals = { assigned: 0 };
+    FEEDBACK_COLS.forEach((c) => (totals[c.key] = 0));
+    userFeedbackReport.forEach((row) => {
+      totals.assigned += row.assigned;
+      FEEDBACK_COLS.forEach((c) => (totals[c.key] += row[c.key] ?? 0));
+    });
+    return totals;
+  }, [userFeedbackReport]);
 
   if (loading) {
     return (
@@ -293,7 +380,7 @@ const DealerDashboard = () => {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Pipeline */}
+        {/* ── Lead Pipeline ───────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border shadow-sm p-5">
           <h2 className="font-bold text-gray-800 mb-4">Lead Pipeline</h2>
           {Object.keys(stageCounts).length === 0 ? (
@@ -330,7 +417,7 @@ const DealerDashboard = () => {
           )}
         </div>
 
-        {/* Recent Leads */}
+        {/* ── Recent Leads ────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border shadow-sm">
           <div className="p-5 border-b flex justify-between items-center">
             <h2 className="font-bold text-gray-800">Recent Leads</h2>
@@ -372,7 +459,7 @@ const DealerDashboard = () => {
         </div>
       </div>
 
-      {/* Property Summary */}
+      {/* ── Property Performance Summary ───────────────────────────── */}
       <div className="bg-white rounded-2xl border shadow-sm">
         <div className="p-5 border-b font-bold text-gray-800">
           Property Performance Summary
@@ -430,6 +517,145 @@ const DealerDashboard = () => {
                   </tr>
                 ))}
               </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ── Call Feedback Overview ─────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border shadow-sm">
+        <div className="p-5 border-b flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h2 className="font-bold text-gray-800">Call Feedback Overview</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Per team member breakdown of call outcomes
+            </p>
+          </div>
+          <button
+            onClick={() => downloadFeedbackReport(userFeedbackReport)}
+            disabled={userFeedbackReport.length === 0}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-semibold hover:bg-indigo-100 transition shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Download size={14} /> Export Excel
+          </button>
+        </div>
+
+        {userFeedbackReport.length === 0 ? (
+          <div className="px-5 py-8 text-center text-gray-400 text-sm">
+            No assigned lead data available yet
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                    Team Member
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                    Total Assigned
+                  </th>
+                  {FEEDBACK_COLS.map((col) => (
+                    <th
+                      key={col.key}
+                      className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap"
+                    >
+                      {col.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-gray-50">
+                {userFeedbackReport.map((row, i) => (
+                  <tr key={i} className="hover:bg-gray-50 transition">
+                    {/* Team member */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                          {(row.user_name || "?")[0].toUpperCase()}
+                        </div>
+                        <span className="font-semibold text-gray-800 whitespace-nowrap">
+                          {row.user_name}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Total assigned */}
+                    <td className="px-4 py-3">
+                      <span className="font-bold text-indigo-600">
+                        {row.assigned}
+                      </span>
+                    </td>
+
+                    {/* Per feedback counts — badge styled from CALL_FEEDBACK_COLORS */}
+                    {FEEDBACK_COLS.map((col) => {
+                      const colors = CALL_FEEDBACK_COLORS[col.label] || {
+                        bg: "bg-gray-100",
+                        text: "text-gray-500",
+                      };
+                      const count = row[col.key] ?? 0;
+                      return (
+                        <td key={col.key} className="px-4 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`inline-flex items-center justify-center min-w-[24px] px-2 py-0.5 rounded-lg text-xs font-bold ${colors.bg} ${colors.text}`}
+                            >
+                              {count}
+                            </span>
+                            {row.assigned > 0 && (
+                              <span className="text-[10px] text-gray-300">
+                                {((count / row.assigned) * 100).toFixed(0)}%
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+
+              {/* ✅ Totals footer row */}
+              <tfoot className="border-t-2 border-gray-200 bg-gray-50/80">
+                <tr>
+                  <td className="px-4 py-3 font-bold text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">
+                    Total
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="font-bold text-indigo-600">
+                      {feedbackTotals.assigned}
+                    </span>
+                  </td>
+                  {FEEDBACK_COLS.map((col) => {
+                    const colors = CALL_FEEDBACK_COLORS[col.label] || {
+                      bg: "bg-gray-100",
+                      text: "text-gray-500",
+                    };
+                    const count = feedbackTotals[col.key] ?? 0;
+                    return (
+                      <td key={col.key} className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`inline-flex items-center justify-center min-w-[24px] px-2 py-0.5 rounded-lg text-xs font-bold ${colors.bg} ${colors.text}`}
+                          >
+                            {count}
+                          </span>
+                          {feedbackTotals.assigned > 0 && (
+                            <span className="text-[10px] text-gray-300">
+                              {(
+                                (count / feedbackTotals.assigned) *
+                                100
+                              ).toFixed(0)}
+                              %
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}

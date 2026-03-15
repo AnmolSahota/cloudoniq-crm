@@ -1,34 +1,32 @@
 // src/pages/dealer/LeadManagement.jsx
 // Dynamic lead CRM — role-aware (DEALER vs DEALER_USER)
 
-import { useState, useEffect, useMemo, useRef } from "react";
 import axios from "axios";
-import * as XLSX from "xlsx";
 import {
-  Search,
-  Plus,
-  Phone,
-  Mail,
-  ChevronRight,
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Building2,
+  CheckCircle2,
   ChevronLeft,
-  X,
+  ChevronRight,
+  Download,
+  FileSpreadsheet,
+  Mail,
+  Phone,
+  Plus,
   Save,
+  Search,
   StickyNote,
   Trash2,
-  UserCircle,
   Upload,
-  AlertTriangle,
-  Download,
-  CheckCircle2,
-  FileSpreadsheet,
-  Building2,
-  ArrowUp,
-  ArrowDown,
-  ArrowUpDown,
-  Eye,
-  EyeOff,
+  UserCircle,
+  X,
 } from "lucide-react";
-import { PageHeader, StageBadge, EmptyState } from "./SharedComponents";
+import { useEffect, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
+import { EmptyState, PageHeader, StageBadge } from "./SharedComponents";
 import { BASE_URL } from "./config";
 import {
   CALL_FEEDBACK_COLORS,
@@ -65,8 +63,9 @@ const maskPhone = (phone) => {
 };
 
 /* ─── PHONE CELL COMPONENT ──────────────────────────────────────────────────── */
-// Handles masking + reveal + tap-to-call in one reusable component
-const PhoneCell = ({ phone, className = "" }) => {
+// DEALER       → masked number + call icon, click = unmask + dial
+// DEALER_USER  → assigned: masked + call icon | unassigned: masked only, no call icon
+const PhoneCell = ({ phone, canCall, className = "" }) => {
   const [revealed, setRevealed] = useState(false);
 
   if (!phone) return <span className="text-gray-300">—</span>;
@@ -76,29 +75,20 @@ const PhoneCell = ({ phone, className = "" }) => {
       className={"flex items-center gap-1.5 " + className}
       onClick={(e) => e.stopPropagation()}
     >
-      {/* Number — masked or revealed */}
+      {/* ✅ Masked by default, full number shown after call click */}
       <span className="text-gray-600 text-sm font-mono whitespace-nowrap">
         {revealed ? phone : maskPhone(phone)}
       </span>
 
-      {/* ✅ Eye icon — always visible, not hover-dependent */}
-      <button
-        onClick={() => setRevealed((r) => !r)}
-        className="p-1 rounded-lg text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 transition shrink-0"
-        title={revealed ? "Hide number" : "Reveal number"}
-      >
-        {revealed ? <EyeOff size={12} /> : <Eye size={12} />}
-      </button>
-
-      {/* ✅ Call button — always visible when revealed */}
-      {revealed && (
+      {/* ✅ Call icon — only shown when canCall, click unmasks + dials */}
+      {canCall && (
         <a
           href={"tel:" + phone.replace(/\D/g, "")}
-          className="flex items-center gap-1 p-1 rounded-lg text-gray-300 hover:text-emerald-600 hover:bg-emerald-50 transition shrink-0"
+          onClick={() => setRevealed(true)}
+          className="flex items-center gap-1 p-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 hover:bg-emerald-100 transition shrink-0"
           title={"Call " + phone}
-          onClick={(e) => e.stopPropagation()}
         >
-          <Phone size={12} />
+          <Phone size={13} />
         </a>
       )}
     </div>
@@ -106,43 +96,77 @@ const PhoneCell = ({ phone, className = "" }) => {
 };
 
 /* ─── PHONE INPUT WITH CALL BUTTON ──────────────────────────────────────────── */
-// Used in detail panel — editable input + call button when has value
-const PhoneInput = ({ value, disabled, onChange, placeholder }) => (
-  <div className="relative">
-    <Phone
-      size={15}
-      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-    />
-    <input
-      className={`${inputCls} pl-9 ${value && !disabled ? "pr-12" : ""}`}
-      value={value}
-      disabled={disabled}
-      onChange={onChange}
-      placeholder={placeholder || "9876543210"}
-    />
-    {/* Tap to call button — shown only when has value and not in edit mode */}
-    {value && disabled && (
-      <a
-        href={"tel:" + value.replace(/\D/g, "")}
-        title={"Call " + value}
-        className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 text-[10px] font-semibold hover:bg-emerald-100 transition"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <Phone size={10} /> Call
-      </a>
-    )}
-    {value && !disabled && (
-      <a
-        href={`tel:${value.replace(/\D/g, "")}`}
-        className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 text-[10px] font-semibold hover:bg-emerald-100 transition"
-        title={`Call ${value}`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <Phone size={10} /> Call
-      </a>
-    )}
-  </div>
-);
+// disabled (view mode) → masked number as text + call icon (same as table)
+// enabled  (edit mode) → editable input + call button on right
+const PhoneInput = ({ value, disabled, onChange, placeholder, canCall }) => {
+  const [revealed, setRevealed] = useState(false);
+
+  // ✅ VIEW MODE — show masked number + call icon, same pattern as PhoneCell
+  if (disabled) {
+    return (
+      <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
+        <Phone size={14} className="text-gray-400 shrink-0" />
+        <span className="flex-1 text-sm font-mono text-gray-600">
+          {value ? (
+            revealed ? (
+              value
+            ) : (
+              maskPhone(value)
+            )
+          ) : (
+            <span className="text-gray-300">No number</span>
+          )}
+        </span>
+        {/* ✅ Call icon — only if canCall, click unmasks + dials */}
+        {value && canCall && (
+          <a
+            href={"tel:" + value.replace(/\D/g, "")}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 text-[10px] font-semibold hover:bg-emerald-100 transition shrink-0"
+            title={"Call " + value}
+            onClick={(e) => {
+              e.stopPropagation();
+              setRevealed(true);
+            }}
+          >
+            <Phone size={10} /> Call
+          </a>
+        )}
+        {/* ✅ Masked only — no call icon for unassigned DEALER_USER */}
+        {value && !canCall && (
+          <span className="text-[10px] text-gray-300 font-mono">
+            {maskPhone(value)}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  // ✅ EDIT MODE — standard editable input with call button
+  return (
+    <div className="relative">
+      <Phone
+        size={15}
+        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+      />
+      <input
+        className={`${inputCls} pl-9 ${value && canCall ? "pr-16" : ""}`}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder || "9876543210"}
+      />
+      {value && canCall && (
+        <a
+          href={"tel:" + value.replace(/\D/g, "")}
+          title={"Call " + value}
+          className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 text-[10px] font-semibold hover:bg-emerald-100 transition"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Phone size={10} /> Call
+        </a>
+      )}
+    </div>
+  );
+};
 
 // ── Shared hook: active DEALER_USERs ─────────────────────────────────────────
 const useDealerUsers = () => {
@@ -1303,6 +1327,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                     setSaved(false);
                   }}
                   placeholder="9876543210"
+                  canCall={!isDealer_User || isAssignedToMe} // ✅ same rule as PhoneCell
                 />
               </div>
               {lead.contact_email && (
@@ -1313,7 +1338,44 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               )}
             </div>
           </div>
-
+          {/* ✅ Call Feedback — independent field, saved with Update Lead */}
+          <div>
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Call Feedback
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {CALL_FEEDBACK_OPTIONS.map((option) => {
+                const colors = CALL_FEEDBACK_COLORS[option];
+                // ✅ "Assign" appears selected when nothing is chosen yet
+                const isSelected =
+                  selectedCallFeedback === option ||
+                  (option === "Assign" && !selectedCallFeedback);
+                return (
+                  <button
+                    key={option}
+                    disabled={!canEdit}
+                    onClick={() => {
+                      // ✅ clicking "Assign" again clears back to default (null)
+                      setSelectedCallFeedback(
+                        option === "Assign" ||
+                          (isSelected && option === selectedCallFeedback)
+                          ? ""
+                          : option,
+                      );
+                      setSaved(false);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+                      isSelected
+                        ? `${colors.bg} ${colors.text} border-transparent`
+                        : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           {/* Stage */}
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
@@ -1337,38 +1399,6 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                   {s}
                 </button>
               ))}
-            </div>
-          </div>
-
-          {/* ✅ Call Feedback — independent field, saved with Update Lead */}
-          <div>
-            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Call Feedback
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {CALL_FEEDBACK_OPTIONS.map((option) => {
-                const colors = CALL_FEEDBACK_COLORS[option];
-                const isSelected = selectedCallFeedback === option;
-                return (
-                  <button
-                    key={option}
-                    disabled={!canEdit}
-                    onClick={() => {
-                      setSelectedCallFeedback(
-                        isSelected ? "" : option, // ✅ toggle off by clicking again
-                      );
-                      setSaved(false);
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
-                      isSelected
-                        ? `${colors.bg} ${colors.text} border-transparent`
-                        : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                    } disabled:opacity-50 disabled:cursor-not-allowed`}
-                  >
-                    {option}
-                  </button>
-                );
-              })}
             </div>
           </div>
 
@@ -1654,22 +1684,6 @@ const SortIcon = ({ colKey, sortConfig }) => {
       size={13}
       className="inline ml-1 text-gray-300 group-hover:text-gray-400 transition"
     />
-  );
-};
-
-/* ── Call Feedback Badge ─────────────────────────────────────────────────────── */
-const CallFeedbackBadge = ({ feedback }) => {
-  if (!feedback) return null;
-  const colors = CALL_FEEDBACK_COLORS[feedback] || {
-    bg: "bg-gray-100",
-    text: "text-gray-500",
-  };
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold ${colors.bg} ${colors.text}`}
-    >
-      {feedback}
-    </span>
   );
 };
 
@@ -1970,6 +1984,9 @@ const LeadManagement = () => {
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
                       Stage
                     </th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                      Call Feedback
+                    </th>
                     {!isDealer_User && (
                       <th
                         onClick={() => handleSort("assigned")}
@@ -2029,7 +2046,13 @@ const LeadManagement = () => {
 
                       {/* ✅ Phone — masked with hover reveal + tap-to-call */}
                       <td className="px-4 py-3">
-                        <PhoneCell phone={lead.contact_phone} />
+                        <PhoneCell
+                          phone={lead.contact_phone}
+                          canCall={
+                            !isDealer_User || // DEALER always can
+                            lead.assigned_to === authUser.id // DEALER_USER only if assigned
+                          }
+                        />
                       </td>
 
                       {/* Property */}
@@ -2057,7 +2080,20 @@ const LeadManagement = () => {
                       <td className="px-4 py-3">
                         <StageBadge stage={lead.stage} />
                       </td>
-
+                      <td className="px-4 py-3">
+                        {lead.call_feedback ? (
+                          <span
+                            className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap
+                              ${CALL_FEEDBACK_COLORS[lead.call_feedback]?.bg || "bg-gray-100"}
+                              ${CALL_FEEDBACK_COLORS[lead.call_feedback]?.text || "text-gray-500"}
+                            `}
+                          >
+                            {lead.call_feedback}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
                       {/* Assigned To — DEALER only */}
                       {!isDealer_User && (
                         <td className="px-4 py-3 whitespace-nowrap text-xs">

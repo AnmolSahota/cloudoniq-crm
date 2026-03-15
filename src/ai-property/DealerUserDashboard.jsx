@@ -102,8 +102,6 @@ export default function DealerUserDashboard() {
   const firstName = authUser?.name?.split(" ")?.[0] || "there";
 
   const hour = new Date().getHours();
-  const greeting =
-    hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   const [leads, setLeads] = useState([]);
   const [visits, setVisits] = useState([]);
@@ -222,7 +220,7 @@ export default function DealerUserDashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <h2 className="text-xl font-black text-gray-900">
-            {greeting}, {firstName} 👋
+            Hello, {firstName} 👋
           </h2>
           <p className="text-sm text-gray-400 mt-0.5">
             Here's what's happening with your pipeline today.
