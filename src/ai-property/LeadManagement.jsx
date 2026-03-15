@@ -30,7 +30,12 @@ import {
 } from "lucide-react";
 import { PageHeader, StageBadge, EmptyState } from "./SharedComponents";
 import { BASE_URL } from "./config";
-import { LEAD_STAGES, STAGE_COLORS } from "./mockData";
+import {
+  CALL_FEEDBACK_COLORS,
+  CALL_FEEDBACK_OPTIONS,
+  LEAD_STAGES,
+  STAGE_COLORS,
+} from "./mockData";
 
 /* ─── AUTH HELPERS ─────────────────────────────────────────────────────────── */
 const getAuthUser = () => JSON.parse(localStorage.getItem("auth_user")) || {};
@@ -1035,6 +1040,9 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
   const isDealer_User = authUser.role === "DEALER_USER";
 
   const [selectedStage, setSelectedStage] = useState(lead.stage);
+  const [selectedCallFeedback, setSelectedCallFeedback] = useState(
+    lead.call_feedback || "",
+  ); // ✅ NEW
   const [selectedUserId, setSelectedUserId] = useState(lead.assigned_to || "");
   const [selectedPropertyId, setSelectedPropertyId] = useState(
     lead.property_id || "",
@@ -1063,6 +1071,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
 
   const isDirty =
     selectedStage !== lead.stage ||
+    selectedCallFeedback !== (lead.call_feedback || "") || // ✅ NEW
     selectedUserId !== (lead.assigned_to || "") ||
     selectedPropertyId !== (lead.property_id || "") ||
     newNote.trim() !== "" ||
@@ -1115,6 +1124,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
         budget: editBudget ? Number(editBudget) : null,
         location: editLocation.trim() || null,
         stage: selectedStage,
+        call_feedback: selectedCallFeedback || null, // ✅ NEW
         assigned_to: isDealer_User ? lead.assigned_to : selectedUserId || null,
         assigned_name: isDealer_User
           ? lead.assigned_name
@@ -1327,6 +1337,38 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                   {s}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* ✅ Call Feedback — independent field, saved with Update Lead */}
+          <div>
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Call Feedback
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {CALL_FEEDBACK_OPTIONS.map((option) => {
+                const colors = CALL_FEEDBACK_COLORS[option];
+                const isSelected = selectedCallFeedback === option;
+                return (
+                  <button
+                    key={option}
+                    disabled={!canEdit}
+                    onClick={() => {
+                      setSelectedCallFeedback(
+                        isSelected ? "" : option, // ✅ toggle off by clicking again
+                      );
+                      setSaved(false);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+                      isSelected
+                        ? `${colors.bg} ${colors.text} border-transparent`
+                        : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -1612,6 +1654,22 @@ const SortIcon = ({ colKey, sortConfig }) => {
       size={13}
       className="inline ml-1 text-gray-300 group-hover:text-gray-400 transition"
     />
+  );
+};
+
+/* ── Call Feedback Badge ─────────────────────────────────────────────────────── */
+const CallFeedbackBadge = ({ feedback }) => {
+  if (!feedback) return null;
+  const colors = CALL_FEEDBACK_COLORS[feedback] || {
+    bg: "bg-gray-100",
+    text: "text-gray-500",
+  };
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold ${colors.bg} ${colors.text}`}
+    >
+      {feedback}
+    </span>
   );
 };
 

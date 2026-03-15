@@ -74,60 +74,45 @@ export const PLAN_CONFIG = {
 };
 
 /* ─── LEAD STAGES ────────────────────────────────────────────────────────────── */
+// Replace existing LEAD_STAGES with this
 export const LEAD_STAGES = [
   "New",
-  "Contacted",
-  "Not Contactable",
   "Suspect",
   "Prospect",
-  "Visit Scheduled",
   "Negotiation",
   "Closed",
   "Lost",
   "On Hold",
-  "Not Interested",
 ];
 
+// Replace existing STAGE_COLORS with this
 export const STAGE_COLORS = {
-  New: { bg: "bg-blue-100", text: "text-blue-700", dot: "bg-blue-500" },
-  Contacted: {
-    bg: "bg-yellow-100",
-    text: "text-yellow-700",
-    dot: "bg-yellow-500",
-  },
-  Suspect: { bg: "bg-cyan-100", text: "text-cyan-700", dot: "bg-cyan-500" },
-  Prospect: {
-    bg: "bg-indigo-100",
-    text: "text-indigo-700",
-    dot: "bg-indigo-500",
-  },
-  "Visit Scheduled": {
-    bg: "bg-purple-100",
-    text: "text-purple-700",
-    dot: "bg-purple-500",
-  },
-  Negotiation: {
-    bg: "bg-orange-100",
-    text: "text-orange-700",
-    dot: "bg-orange-500",
-  },
-  Closed: {
-    bg: "bg-emerald-100",
-    text: "text-emerald-700",
-    dot: "bg-emerald-500",
-  },
-  Lost: { bg: "bg-red-100", text: "text-red-700", dot: "bg-red-500" },
-  "On Hold": { bg: "bg-gray-200", text: "text-gray-600", dot: "bg-gray-400" },
-  "Not Contactable": {
-    bg: "bg-slate-100",
-    text: "text-slate-600",
-    dot: "bg-slate-400",
-  },
-  "Not Interested": {
-    bg: "bg-rose-100",
-    text: "text-rose-700",
-    dot: "bg-rose-500",
-  },
+  New: { bg: "bg-blue-100", text: "text-blue-700" },
+  Suspect: { bg: "bg-purple-100", text: "text-purple-700" },
+  Prospect: { bg: "bg-indigo-100", text: "text-indigo-700" },
+  Negotiation: { bg: "bg-amber-100", text: "text-amber-700" },
+  Closed: { bg: "bg-emerald-100", text: "text-emerald-700" },
+  Lost: { bg: "bg-red-100", text: "text-red-600" },
+  "On Hold": { bg: "bg-gray-100", text: "text-gray-500" },
+};
+
+// ✅ NEW — Call Feedback options + colors
+export const CALL_FEEDBACK_OPTIONS = [
+  "Interested",
+  "Not Interested",
+  "No Response",
+  "Call Later",
+  "Visit Scheduled",
+  "Invalid Number",
+];
+
+export const CALL_FEEDBACK_COLORS = {
+  Interested: { bg: "bg-emerald-100", text: "text-emerald-700" },
+  "Not Interested": { bg: "bg-red-100", text: "text-red-600" },
+  "No Response": { bg: "bg-gray-100", text: "text-gray-500" },
+  "Call Later": { bg: "bg-amber-100", text: "text-amber-700" },
+  "Visit Scheduled": { bg: "bg-blue-100", text: "text-blue-700" },
+  "Invalid Number": { bg: "bg-orange-100", text: "text-orange-700" },
 };
 
 export const LEAD_SOURCES = [
