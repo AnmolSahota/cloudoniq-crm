@@ -560,6 +560,137 @@ const INIT_FORM = {
   location: "",
   assigned_to: "",
   bhk: "",
+  possession: "",
+};
+/* ── Month/Year Picker ───────────────────────────────────────────────────────── */
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+const MonthYearPicker = ({ value, onChange, disabled }) => {
+  const [open, setOpen] = useState(false);
+  const today = new Date();
+  const [pickerYear, setPickerYear] = useState(today.getFullYear());
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  if (disabled) {
+    return (
+      <div className={`${inputCls} text-gray-600`}>
+        {value || <span className="text-gray-300">Not set</span>}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`${inputCls} text-left flex items-center justify-between`}
+      >
+        <span className={value ? "text-gray-800" : "text-gray-400"}>
+          {value || "Select possession date"}
+        </span>
+        <ChevronRight
+          size={14}
+          className={`text-gray-400 transition-transform shrink-0 ${open ? "rotate-90" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-64 bg-white rounded-2xl border border-gray-200 shadow-2xl overflow-hidden">
+          {/* Ready to Move */}
+          <button
+            type="button"
+            onClick={() => {
+              onChange("Ready to Move");
+              setOpen(false);
+            }}
+            className={`w-full px-4 py-2.5 text-left text-xs font-semibold transition-colors border-b border-gray-100
+              ${
+                value === "Ready to Move"
+                  ? "bg-indigo-600 text-white"
+                  : "text-indigo-600 hover:bg-indigo-50"
+              }`}
+          >
+            ✓ Ready to Move
+          </button>
+
+          {/* Year nav */}
+          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
+            <button
+              type="button"
+              onClick={() => setPickerYear((y) => y - 1)}
+              disabled={pickerYear <= today.getFullYear()}
+              className="p-1 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <span className="font-bold text-gray-800 text-xs">
+              {pickerYear}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPickerYear((y) => y + 1)}
+              disabled={pickerYear >= today.getFullYear() + 5}
+              className="p-1 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+
+          {/* Months grid */}
+          <div className="grid grid-cols-3 gap-1 p-2">
+            {MONTH_NAMES.map((m, i) => {
+              const isSelected = value === `${m} ${pickerYear}`;
+              const isPast =
+                pickerYear === today.getFullYear() && i < today.getMonth();
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  disabled={isPast}
+                  onClick={() => {
+                    onChange(`${m} ${pickerYear}`);
+                    setOpen(false);
+                  }}
+                  className={`py-1.5 rounded-lg text-xs font-semibold transition-all
+                    ${
+                      isSelected
+                        ? "bg-indigo-600 text-white shadow"
+                        : isPast
+                          ? "text-gray-300 cursor-not-allowed"
+                          : "text-gray-700 hover:bg-indigo-50 hover:text-indigo-600"
+                    }`}
+                >
+                  {m}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 const AddLeadPanel = ({ onClose, onSave }) => {
@@ -599,6 +730,7 @@ const AddLeadPanel = ({ onClose, onSave }) => {
         budget: form.budget ? Number(form.budget) : null,
         location: form.location.trim() || selectedProperty?.location || null,
         bhk: form.bhk || null, // ✅ NEW
+        possession: form.possession || null,
         source: "Manual",
         assigned_to: isDealer_User ? authUser.id : form.assigned_to || null,
         assigned_name: isDealer_User
@@ -760,6 +892,38 @@ const AddLeadPanel = ({ onClose, onSave }) => {
                 value={form.location}
                 onChange={(e) => set("location", e.target.value)}
                 placeholder="Noida"
+              />
+            </div>
+          </div>
+
+          {/* BHK + Possession — optional lead-specific fields */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                BHK Type{" "}
+                <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <select
+                value={form.bhk}
+                onChange={(e) => set("bhk", e.target.value)}
+                className={inputCls}
+              >
+                <option value="">— Select BHK —</option>
+                {bhkOptions.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                Possession{" "}
+                <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <MonthYearPicker
+                value={form.possession}
+                onChange={(val) => set("possession", val)}
               />
             </div>
           </div>
@@ -1088,7 +1252,6 @@ const LeadTasks = ({ leadId }) => {
 const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
   const authUser = getAuthUser();
   const isDealer_User = authUser.role === "DEALER_USER";
-  const [editBhk, setEditBhk] = useState(lead.bhk || "");
   const [selectedStage, setSelectedStage] = useState(lead.stage);
   const [selectedCallFeedback, setSelectedCallFeedback] = useState(
     lead.call_feedback || "",
@@ -1114,7 +1277,9 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
     lead.budget ? String(lead.budget) : "",
   );
   const [editLocation, setEditLocation] = useState(lead.location || "");
-
+  // ADD after editLocation useState:
+  const [editBhk, setEditBhk] = useState(lead.bhk || "");
+  const [editPossession, setEditPossession] = useState(lead.possession || "");
   const isAssignedToMe = isDealer_User && lead.assigned_to === authUser.id;
   const isUnassigned = !lead.assigned_to;
   const canEdit = !isDealer_User || isAssignedToMe;
@@ -1129,6 +1294,8 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
     editPhone.trim() !== (lead.contact_phone || "") ||
     editBudget !== (lead.budget ? String(lead.budget) : "") ||
     editBhk !== (lead.bhk || "") ||
+    editBhk !== (lead.bhk || "") ||
+    editPossession !== (lead.possession || "") ||
     editLocation.trim() !== (lead.location || "");
 
   const handleSelfAssign = async () => {
@@ -1182,6 +1349,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
           : assignedUser?.name || null,
         property_id: selectedPropertyId || null,
         bhk: editBhk || null,
+        possession: editPossession || null,
       };
       if (newNote.trim()) {
         payload.new_note = {
@@ -1527,8 +1695,20 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                   placeholder="Noida"
                 />
               </div>
-
-              {/* ✅ BHK + Last Updated in same row */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                  Possession{" "}
+                  <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <MonthYearPicker
+                  value={editPossession}
+                  onChange={(val) => {
+                    setEditPossession(val);
+                    setSaved(false);
+                  }}
+                  disabled={!canEdit}
+                />
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   BHK Type{" "}
