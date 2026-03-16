@@ -29,6 +29,7 @@ import * as XLSX from "xlsx";
 import { EmptyState, PageHeader, StageBadge } from "./SharedComponents";
 import { BASE_URL } from "./config";
 import {
+  bhkOptions,
   CALL_FEEDBACK_COLORS,
   CALL_FEEDBACK_OPTIONS,
   LEAD_STAGES,
@@ -550,7 +551,6 @@ const ImportPanel = ({ onClose, onImported }) => {
   );
 };
 
-/* ── Add Lead Panel ──────────────────────────────────────────────────────────── */
 const INIT_FORM = {
   name: "",
   phone: "",
@@ -559,6 +559,7 @@ const INIT_FORM = {
   budget: "",
   location: "",
   assigned_to: "",
+  bhk: "",
 };
 
 const AddLeadPanel = ({ onClose, onSave }) => {
@@ -597,6 +598,7 @@ const AddLeadPanel = ({ onClose, onSave }) => {
         property_id: form.property_id || null,
         budget: form.budget ? Number(form.budget) : null,
         location: form.location.trim() || selectedProperty?.location || null,
+        bhk: form.bhk || null, // ✅ NEW
         source: "Manual",
         assigned_to: isDealer_User ? authUser.id : form.assigned_to || null,
         assigned_name: isDealer_User
@@ -737,7 +739,8 @@ const AddLeadPanel = ({ onClose, onSave }) => {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                Budget (₹)
+                Budget (₹){" "}
+                <span className="text-gray-400 font-normal">(optional)</span>
               </label>
               <input
                 type="number"
@@ -749,7 +752,8 @@ const AddLeadPanel = ({ onClose, onSave }) => {
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                Location
+                Location{" "}
+                <span className="text-gray-400 font-normal">(optional)</span>
               </label>
               <input
                 className={inputCls}
@@ -757,6 +761,28 @@ const AddLeadPanel = ({ onClose, onSave }) => {
                 onChange={(e) => set("location", e.target.value)}
                 placeholder="Noida"
               />
+            </div>
+          </div>
+
+          {/* BHK — optional lead-specific fields */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                BHK Type{" "}
+                <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <select
+                value={form.bhk}
+                onChange={(e) => set("bhk", e.target.value)}
+                className={inputCls}
+              >
+                <option value="">— Select BHK —</option>
+                {bhkOptions.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -1062,7 +1088,7 @@ const LeadTasks = ({ leadId }) => {
 const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
   const authUser = getAuthUser();
   const isDealer_User = authUser.role === "DEALER_USER";
-
+  const [editBhk, setEditBhk] = useState(lead.bhk || "");
   const [selectedStage, setSelectedStage] = useState(lead.stage);
   const [selectedCallFeedback, setSelectedCallFeedback] = useState(
     lead.call_feedback || "",
@@ -1102,6 +1128,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
     editName.trim() !== (lead.contact_name || "") ||
     editPhone.trim() !== (lead.contact_phone || "") ||
     editBudget !== (lead.budget ? String(lead.budget) : "") ||
+    editBhk !== (lead.bhk || "") ||
     editLocation.trim() !== (lead.location || "");
 
   const handleSelfAssign = async () => {
@@ -1148,12 +1175,13 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
         budget: editBudget ? Number(editBudget) : null,
         location: editLocation.trim() || null,
         stage: selectedStage,
-        call_feedback: selectedCallFeedback || null, // ✅ NEW
+        call_feedback: selectedCallFeedback || null,
         assigned_to: isDealer_User ? lead.assigned_to : selectedUserId || null,
         assigned_name: isDealer_User
           ? lead.assigned_name
           : assignedUser?.name || null,
         property_id: selectedPropertyId || null,
+        bhk: editBhk || null,
       };
       if (newNote.trim()) {
         payload.new_note = {
@@ -1461,7 +1489,6 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
             </div>
           )}
 
-          {/* Budget & Location */}
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Details
@@ -1469,7 +1496,8 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                  Budget (₹)
+                  Budget (₹){" "}
+                  <span className="text-gray-400 font-normal">(optional)</span>
                 </label>
                 <input
                   type="number"
@@ -1485,7 +1513,8 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                  Location
+                  Location{" "}
+                  <span className="text-gray-400 font-normal">(optional)</span>
                 </label>
                 <input
                   className={inputCls}
@@ -1498,19 +1527,37 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                   placeholder="Noida"
                 />
               </div>
-            </div>
-          </div>
 
-          {/* Read-only info */}
-          <div className="grid grid-cols-2 gap-3">
-            {[["Last Updated", lead.updated_at]].map(([k, v]) => (
-              <div key={k} className="bg-gray-50 rounded-xl p-3">
-                <div className="text-xs text-gray-400">{k}</div>
+              {/* ✅ BHK + Last Updated in same row */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                  BHK Type{" "}
+                  <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <select
+                  value={editBhk}
+                  disabled={!canEdit}
+                  onChange={(e) => {
+                    setEditBhk(e.target.value);
+                    setSaved(false);
+                  }}
+                  className={inputCls}
+                >
+                  <option value="">— Select BHK —</option>
+                  {bhkOptions.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="bg-gray-50 rounded-xl px-3 py-2.5 flex flex-col justify-center">
+                <div className="text-xs text-gray-400">Last Updated</div>
                 <div className="font-semibold text-gray-800 text-sm mt-0.5 truncate">
-                  {v}
+                  {lead.updated_at}
                 </div>
               </div>
-            ))}
+            </div>
           </div>
 
           {/* Tasks & Follow-ups — only visible when user can edit this lead */}
