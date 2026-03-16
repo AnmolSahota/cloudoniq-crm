@@ -272,7 +272,7 @@ const DealerDashboard = () => {
       // Falls back to "assign" if null/missing (default DB value is "Assign")
       const feedbackKey = lead.call_feedback
         ? optionToKey(lead.call_feedback)
-        : "assign";
+        : "to_be_called";
 
       if (userMap[key][feedbackKey] !== undefined) {
         userMap[key][feedbackKey] += 1;

@@ -98,7 +98,7 @@ export const STAGE_COLORS = {
 
 // ✅ NEW — Call Feedback options + colors
 export const CALL_FEEDBACK_OPTIONS = [
-  "Assign",           // ✅ first stage
+  "To Be Called",
   "Interested",
   "Not Interested",
   "No Response",
@@ -108,14 +108,15 @@ export const CALL_FEEDBACK_OPTIONS = [
 ];
 
 export const CALL_FEEDBACK_COLORS = {
-  "Assign":          { bg: "bg-violet-100",  text: "text-violet-700"  }, // ✅ added
-  "Interested":      { bg: "bg-emerald-100", text: "text-emerald-700" },
-  "Not Interested":  { bg: "bg-red-100",     text: "text-red-600"     },
-  "No Response":     { bg: "bg-gray-100",    text: "text-gray-500"    },
-  "Call Later":      { bg: "bg-amber-100",   text: "text-amber-700"   },
-  "Visit Scheduled": { bg: "bg-blue-100",    text: "text-blue-700"    },
-  "Invalid Number":  { bg: "bg-orange-100",  text: "text-orange-700"  },
+  "To Be Called": { bg: "bg-violet-100", text: "text-violet-700" }, // ✅ renamed
+  Interested: { bg: "bg-emerald-100", text: "text-emerald-700" },
+  "Not Interested": { bg: "bg-red-100", text: "text-red-600" },
+  "No Response": { bg: "bg-gray-100", text: "text-gray-500" },
+  "Call Later": { bg: "bg-amber-100", text: "text-amber-700" },
+  "Visit Scheduled": { bg: "bg-blue-100", text: "text-blue-700" },
+  "Invalid Number": { bg: "bg-orange-100", text: "text-orange-700" },
 };
+
 export const LEAD_SOURCES = [
   "Chatbot",
   "Website",

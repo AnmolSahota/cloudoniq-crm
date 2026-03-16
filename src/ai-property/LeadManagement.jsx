@@ -900,24 +900,6 @@ const AddLeadPanel = ({ onClose, onSave }) => {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                BHK Type{" "}
-                <span className="text-gray-400 font-normal">(optional)</span>
-              </label>
-              <select
-                value={form.bhk}
-                onChange={(e) => set("bhk", e.target.value)}
-                className={inputCls}
-              >
-                <option value="">— Select BHK —</option>
-                {bhkOptions.map((o) => (
-                  <option key={o} value={o}>
-                    {o}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                 Possession{" "}
                 <span className="text-gray-400 font-normal">(optional)</span>
               </label>
@@ -926,10 +908,6 @@ const AddLeadPanel = ({ onClose, onSave }) => {
                 onChange={(val) => set("possession", val)}
               />
             </div>
-          </div>
-
-          {/* BHK — optional lead-specific fields */}
-          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                 BHK Type{" "}
@@ -1545,15 +1523,14 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                 // ✅ "Assign" appears selected when nothing is chosen yet
                 const isSelected =
                   selectedCallFeedback === option ||
-                  (option === "Assign" && !selectedCallFeedback);
+                  (option === "To Be Called" && !selectedCallFeedback);
                 return (
                   <button
                     key={option}
                     disabled={!canEdit}
                     onClick={() => {
-                      // ✅ clicking "Assign" again clears back to default (null)
                       setSelectedCallFeedback(
-                        option === "Assign" ||
+                        option === "To Be Called" ||
                           (isSelected && option === selectedCallFeedback)
                           ? ""
                           : option,
