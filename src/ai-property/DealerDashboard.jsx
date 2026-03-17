@@ -1,34 +1,32 @@
 // src/pages/dealer/DealerDashboard.jsx
 
-import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
-import * as XLSX from "xlsx";
 import {
   Activity,
   AlertTriangle,
   Calendar,
   CheckCircle,
-  Copy,
+  ChevronDown,
   Download,
-  ExternalLink,
-  Globe,
+  Loader2,
   TrendingUp,
   Users,
+  X,
   XCircle,
-  Loader2,
 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { PageHeader, StageBadge, StatCard } from "./SharedComponents";
-import {
-  STAGE_COLORS,
-  CALL_FEEDBACK_OPTIONS,
-  CALL_FEEDBACK_COLORS,
-} from "./mockData";
 import { BASE_URL } from "./config";
+import {
+  CALL_FEEDBACK_COLORS,
+  CALL_FEEDBACK_OPTIONS,
+  STAGE_COLORS,
+} from "./mockData";
 
 const getDealerId = () =>
   JSON.parse(localStorage.getItem("auth_user"))?.id || "";
 
-// ── Read dealer info from localStorage (set on login) ────────────────────────
 const getDealerInfo = () => {
   try {
     const user = JSON.parse(localStorage.getItem("auth_user")) || {};
@@ -43,13 +41,10 @@ const getDealerInfo = () => {
   }
 };
 
-// ── Website base URL from env ─────────────────────────────────────────────────
 const SITE_BASE_URL =
   process.env.REACT_APP_SITE_BASE_URL || "https://propertyai.in";
 
-// ── Derive FEEDBACK_COLS dynamically from mockData constants ──────────────────
-// Key = option label lowercased + spaces replaced with underscore
-// e.g. "Not Interested" → "not_interested", "Visit Scheduled" → "visit_scheduled"
+// ── Feedback column config ────────────────────────────────────────────────────
 const optionToKey = (option) => option.toLowerCase().replace(/\s+/g, "_");
 
 const FEEDBACK_COLS = CALL_FEEDBACK_OPTIONS.map((option) => ({
@@ -58,7 +53,57 @@ const FEEDBACK_COLS = CALL_FEEDBACK_OPTIONS.map((option) => ({
   color: CALL_FEEDBACK_COLORS[option]?.text || "text-gray-500",
 }));
 
-// ── Excel download — fully dynamic, driven by FEEDBACK_COLS ──────────────────
+// ── Date filter presets ───────────────────────────────────────────────────────
+const FILTER_PRESETS = [
+  { key: "all", label: "All Time" },
+  { key: "today", label: "Today" },
+  { key: "week", label: "This Week" },
+  { key: "month", label: "This Month" },
+  { key: "custom", label: "Custom" },
+];
+
+const getPresetRange = (key) => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  if (key === "today") {
+    return { from: today, to: new Date(today.getTime() + 86399999) };
+  }
+  if (key === "week") {
+    const day = today.getDay();
+    const mon = new Date(today);
+    mon.setDate(today.getDate() - ((day + 6) % 7));
+    const sun = new Date(mon);
+    sun.setDate(mon.getDate() + 6);
+    sun.setHours(23, 59, 59, 999);
+    return { from: mon, to: sun };
+  }
+  if (key === "month") {
+    const from = new Date(now.getFullYear(), now.getMonth(), 1);
+    const to = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999,
+    );
+    return { from, to };
+  }
+  return null; // "all" and "custom" return null — no range filter
+};
+
+const fmtDisplay = (d) =>
+  d
+    ? d.toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "";
+
+// ── Excel download ────────────────────────────────────────────────────────────
 const downloadFeedbackReport = (data) => {
   const rows = data.map((row) => {
     const out = {
@@ -70,7 +115,6 @@ const downloadFeedbackReport = (data) => {
     });
     return out;
   });
-
   const ws = XLSX.utils.json_to_sheet(rows);
   ws["!cols"] = [
     { wch: 20 },
@@ -82,65 +126,143 @@ const downloadFeedbackReport = (data) => {
   XLSX.writeFile(wb, "call_feedback_report.xlsx");
 };
 
-/* ─── PUBLIC WEBSITE CARD ────────────────────────────────────────────────────── */
-const WebsiteCard = ({ businessName, slug, city }) => {
-  const [copied, setCopied] = useState(false);
-  const websiteUrl = slug ? `${SITE_BASE_URL}/${slug}` : null;
+/* ─── DATE FILTER BAR ────────────────────────────────────────────────────────── */
+const FeedbackDateFilter = ({
+  preset,
+  onPresetChange,
+  customFrom,
+  customTo,
+  onCustomChange,
+}) => {
+  const [showCustom, setShowCustom] = useState(false);
+  const [localFrom, setLocalFrom] = useState(customFrom || "");
+  const [localTo, setLocalTo] = useState(customTo || "");
+  const ref = useRef(null);
 
-  const handleCopy = () => {
-    if (!websiteUrl) return;
-    navigator.clipboard.writeText(websiteUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  // close custom popover on outside click
+  useEffect(() => {
+    const fn = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setShowCustom(false);
+    };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, []);
+
+  const handleApply = () => {
+    if (localFrom && localTo) {
+      onCustomChange(localFrom, localTo);
+      setShowCustom(false);
+    }
   };
 
+  const handlePreset = (key) => {
+    if (key === "custom") {
+      setShowCustom((v) => !v);
+      onPresetChange("custom");
+    } else {
+      setShowCustom(false);
+      onPresetChange(key);
+    }
+  };
+
+  const range =
+    preset !== "all" && preset !== "custom" ? getPresetRange(preset) : null;
+
   return (
-    <div className="bg-gradient-to-r from-indigo-600 to-violet-600 rounded-2xl p-5 text-white shadow-lg">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-            <Globe size={20} className="text-white" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-white/70 text-xs font-semibold uppercase tracking-wide mb-0.5">
-              Your Public Website
-            </p>
-            <p className="font-bold text-base truncate">{businessName}</p>
-            {city && <p className="text-white/60 text-xs mt-0.5">{city}</p>}
-          </div>
-        </div>
-        {websiteUrl && (
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={handleCopy}
-              title="Copy link"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-xs font-semibold transition"
-            >
-              <Copy size={13} />
-              {copied ? "Copied!" : "Copy"}
-            </button>
-            <a
-              href={websiteUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Open website"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-indigo-600 hover:bg-white/90 text-xs font-semibold transition"
-            >
-              <ExternalLink size={13} />
-              Visit
-            </a>
-          </div>
-        )}
+    <div className="flex flex-wrap items-center gap-2" ref={ref}>
+      {/* Preset pills */}
+      <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
+        {FILTER_PRESETS.map((p) => (
+          <button
+            key={p.key}
+            onClick={() => handlePreset(p.key)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition whitespace-nowrap ${
+              preset === p.key
+                ? "bg-white text-indigo-700 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {p.key === "custom" ? (
+              <span className="flex items-center gap-1">
+                {p.label} <ChevronDown size={11} />
+              </span>
+            ) : (
+              p.label
+            )}
+          </button>
+        ))}
       </div>
-      {websiteUrl ? (
-        <div className="mt-4 bg-white/10 rounded-xl px-4 py-2.5">
-          <span className="text-sm font-mono text-white/90 truncate">
-            {websiteUrl}
-          </span>
-        </div>
-      ) : (
-        <div className="mt-4 bg-white/10 rounded-xl px-4 py-2.5 text-white/50 text-sm">
-          No slug configured — contact support to set up your website.
+
+      {/* Active range pill */}
+      {range && (
+        <span className="text-xs text-indigo-600 font-semibold bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-lg">
+          {fmtDisplay(range.from)} – {fmtDisplay(range.to)}
+        </span>
+      )}
+      {preset === "custom" && customFrom && customTo && (
+        <span className="flex items-center gap-1 text-xs text-indigo-600 font-semibold bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-lg">
+          {fmtDisplay(new Date(customFrom))} – {fmtDisplay(new Date(customTo))}
+          <button
+            onClick={() => {
+              onPresetChange("all");
+              onCustomChange("", "");
+            }}
+            className="ml-0.5 text-indigo-400 hover:text-indigo-700 transition"
+          >
+            <X size={11} />
+          </button>
+        </span>
+      )}
+
+      {/* Custom date popover */}
+      {showCustom && (
+        <div
+          className="absolute z-50 mt-2 bg-white rounded-2xl border border-gray-200 shadow-2xl p-4 w-72"
+          style={{ top: "100%", left: 0 }}
+        >
+          <div className="text-xs font-bold text-gray-700 mb-3 uppercase tracking-wide">
+            Custom Date Range
+          </div>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-gray-500 font-semibold mb-1 block">
+                From
+              </label>
+              <input
+                type="date"
+                value={localFrom}
+                onChange={(e) => setLocalFrom(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 font-semibold mb-1 block">
+                To
+              </label>
+              <input
+                type="date"
+                value={localTo}
+                min={localFrom}
+                onChange={(e) => setLocalTo(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition"
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setShowCustom(false)}
+                className="flex-1 py-2 rounded-xl border text-xs font-semibold text-gray-600 hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApply}
+                disabled={!localFrom || !localTo}
+                className="flex-1 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition disabled:opacity-40"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -154,6 +276,11 @@ const DealerDashboard = () => {
   const [tasks, setTasks] = useState([]);
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // ── Feedback filter state ──────────────────────────────────────────────────
+  const [feedbackPreset, setFeedbackPreset] = useState("all");
+  const [feedbackCustomFrom, setFeedbackCustomFrom] = useState("");
+  const [feedbackCustomTo, setFeedbackCustomTo] = useState("");
 
   const dealerInfo = getDealerInfo();
 
@@ -244,14 +371,49 @@ const DealerDashboard = () => {
     [properties, leads, visits],
   );
 
-  // ── Call Feedback report — computed from real leads, grouped by assigned user
-  // Each lead has: assigned_to, assigned_name, call_feedback
-  // Unassigned leads are excluded — no user to attribute to
+  // ── Feedback date range resolver ───────────────────────────────────────────
+  const feedbackDateRange = useMemo(() => {
+    if (feedbackPreset === "custom" && feedbackCustomFrom && feedbackCustomTo) {
+      return {
+        from: new Date(feedbackCustomFrom),
+        to: new Date(feedbackCustomTo + "T23:59:59.999"),
+      };
+    }
+    if (feedbackPreset !== "all" && feedbackPreset !== "custom") {
+      return getPresetRange(feedbackPreset);
+    }
+    return null; // all time — no filter
+  }, [feedbackPreset, feedbackCustomFrom, feedbackCustomTo]);
+
+  // ── Helper: get latest feedback entry that falls within date range ──────────
+  const getFilteredLatestFeedback = (callFeedback) => {
+    if (!Array.isArray(callFeedback) || callFeedback.length === 0)
+      return "To Be Called";
+
+    if (!feedbackDateRange) {
+      // No filter — just latest entry
+      return callFeedback[callFeedback.length - 1].stage || "To Be Called";
+    }
+
+    // Find the latest entry whose datetime falls within the range
+    const inRange = [...callFeedback].reverse().find((entry) => {
+      if (!entry.datetime) return false;
+      const dt = new Date(entry.datetime);
+      return dt >= feedbackDateRange.from && dt <= feedbackDateRange.to;
+    });
+
+    return inRange ? inRange.stage : null; // null = lead had no activity in range
+  };
+
+  // ── Call Feedback report — grouped by assigned user, filtered by date ───────
   const userFeedbackReport = useMemo(() => {
     const userMap = {};
 
     leads.forEach((lead) => {
-      if (!lead.assigned_to) return; // skip unassigned
+      if (!lead.assigned_to) return;
+
+      const latestStage = getFilteredLatestFeedback(lead.call_feedback);
+      if (latestStage === null) return; // no activity in selected range — skip
 
       const key = lead.assigned_to;
 
@@ -260,7 +422,6 @@ const DealerDashboard = () => {
           user_name: lead.assigned_name || "Unknown",
           assigned: 0,
         };
-        // Init all feedback option keys to 0
         FEEDBACK_COLS.forEach((col) => {
           userMap[key][col.key] = 0;
         });
@@ -268,22 +429,16 @@ const DealerDashboard = () => {
 
       userMap[key].assigned += 1;
 
-      // Map call_feedback label → snake_case key
-      // Falls back to "assign" if null/missing (default DB value is "Assign")
-      const feedbackKey = lead.call_feedback
-        ? optionToKey(lead.call_feedback)
-        : "to_be_called";
-
+      const feedbackKey = optionToKey(latestStage);
       if (userMap[key][feedbackKey] !== undefined) {
         userMap[key][feedbackKey] += 1;
       }
     });
 
-    // Sort by total assigned descending
     return Object.values(userMap).sort((a, b) => b.assigned - a.assigned);
-  }, [leads]);
+  }, [leads, feedbackDateRange]);
 
-  // ── Feedback totals row — sum across all users ──────────────────────────────
+  // ── Feedback totals ──────────────────────────────────────────────────────────
   const feedbackTotals = useMemo(() => {
     const totals = { assigned: 0 };
     FEEDBACK_COLS.forEach((c) => (totals[c.key] = 0));
@@ -293,6 +448,16 @@ const DealerDashboard = () => {
     });
     return totals;
   }, [userFeedbackReport]);
+
+  // ── Active filter label for display ──────────────────────────────────────────
+  const activeFilterLabel = useMemo(() => {
+    if (feedbackPreset === "all") return "All Time";
+    if (feedbackPreset === "custom" && feedbackCustomFrom && feedbackCustomTo)
+      return `${fmtDisplay(new Date(feedbackCustomFrom))} – ${fmtDisplay(new Date(feedbackCustomTo))}`;
+    return (
+      FILTER_PRESETS.find((p) => p.key === feedbackPreset)?.label || "All Time"
+    );
+  }, [feedbackPreset, feedbackCustomFrom, feedbackCustomTo]);
 
   if (loading) {
     return (
@@ -315,13 +480,6 @@ const DealerDashboard = () => {
         title="Dealer Dashboard"
         description="Your sales performance at a glance"
       />
-
-      {/* ── Public Website Card ────────────────────────────────────── */}
-      {/* <WebsiteCard
-        businessName={dealerInfo.businessName}
-        slug={dealerInfo.slug}
-        city={dealerInfo.city}
-      /> */}
 
       {/* ── KPI Row 1 ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -380,7 +538,7 @@ const DealerDashboard = () => {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* ── Lead Pipeline ───────────────────────────────────────── */}
+        {/* ── Lead Pipeline ─────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border shadow-sm p-5">
           <h2 className="font-bold text-gray-800 mb-4">Lead Pipeline</h2>
           {Object.keys(stageCounts).length === 0 ? (
@@ -417,7 +575,7 @@ const DealerDashboard = () => {
           )}
         </div>
 
-        {/* ── Recent Leads ────────────────────────────────────────── */}
+        {/* ── Recent Leads ──────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border shadow-sm">
           <div className="p-5 border-b flex justify-between items-center">
             <h2 className="font-bold text-gray-800">Recent Leads</h2>
@@ -524,25 +682,66 @@ const DealerDashboard = () => {
 
       {/* ── Call Feedback Overview ─────────────────────────────────── */}
       <div className="bg-white rounded-2xl border shadow-sm">
-        <div className="p-5 border-b flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <h2 className="font-bold text-gray-800">Call Feedback Overview</h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Per team member breakdown of call outcomes
-            </p>
+        {/* Header */}
+        <div className="p-5 border-b">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="font-bold text-gray-800">
+                Call Feedback Overview
+              </h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Per team member breakdown of call outcomes
+                {feedbackPreset !== "all" && (
+                  <span className="ml-1 text-indigo-500 font-semibold">
+                    · {activeFilterLabel}
+                  </span>
+                )}
+              </p>
+            </div>
+            <button
+              onClick={() => downloadFeedbackReport(userFeedbackReport)}
+              disabled={userFeedbackReport.length === 0}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-semibold hover:bg-indigo-100 transition shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Download size={14} /> Export Excel
+            </button>
           </div>
-          <button
-            onClick={() => downloadFeedbackReport(userFeedbackReport)}
-            disabled={userFeedbackReport.length === 0}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-semibold hover:bg-indigo-100 transition shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Download size={14} /> Export Excel
-          </button>
+
+          {/* ── Date filter bar — relative positioned wrapper ──────── */}
+          <div className="mt-4 relative">
+            <FeedbackDateFilter
+              preset={feedbackPreset}
+              onPresetChange={(key) => {
+                setFeedbackPreset(key);
+                if (key !== "custom") {
+                  setFeedbackCustomFrom("");
+                  setFeedbackCustomTo("");
+                }
+              }}
+              customFrom={feedbackCustomFrom}
+              customTo={feedbackCustomTo}
+              onCustomChange={(from, to) => {
+                setFeedbackCustomFrom(from);
+                setFeedbackCustomTo(to);
+              }}
+            />
+          </div>
         </div>
 
+        {/* Table */}
         {userFeedbackReport.length === 0 ? (
-          <div className="px-5 py-8 text-center text-gray-400 text-sm">
-            No assigned lead data available yet
+          <div className="px-5 py-10 flex flex-col items-center gap-2 text-center">
+            <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+              <Calendar size={18} className="text-gray-400" />
+            </div>
+            <p className="text-gray-500 text-sm font-semibold">
+              No data for this period
+            </p>
+            <p className="text-gray-400 text-xs">
+              {feedbackPreset !== "all"
+                ? "Try a different date range or switch to All Time"
+                : "No assigned lead data available yet"}
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -553,7 +752,7 @@ const DealerDashboard = () => {
                     Team Member
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
-                    Total Assigned
+                    Total
                   </th>
                   {FEEDBACK_COLS.map((col) => (
                     <th
@@ -569,7 +768,6 @@ const DealerDashboard = () => {
               <tbody className="divide-y divide-gray-50">
                 {userFeedbackReport.map((row, i) => (
                   <tr key={i} className="hover:bg-gray-50 transition">
-                    {/* Team member */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
@@ -580,15 +778,11 @@ const DealerDashboard = () => {
                         </span>
                       </div>
                     </td>
-
-                    {/* Total assigned */}
                     <td className="px-4 py-3">
                       <span className="font-bold text-indigo-600">
                         {row.assigned}
                       </span>
                     </td>
-
-                    {/* Per feedback counts — badge styled from CALL_FEEDBACK_COLORS */}
                     {FEEDBACK_COLS.map((col) => {
                       const colors = CALL_FEEDBACK_COLORS[col.label] || {
                         bg: "bg-gray-100",
@@ -603,7 +797,7 @@ const DealerDashboard = () => {
                             >
                               {count}
                             </span>
-                            {row.assigned > 0 && (
+                            {row.assigned > 0 && count > 0 && (
                               <span className="text-[10px] text-gray-300">
                                 {((count / row.assigned) * 100).toFixed(0)}%
                               </span>
@@ -616,7 +810,7 @@ const DealerDashboard = () => {
                 ))}
               </tbody>
 
-              {/* ✅ Totals footer row */}
+              {/* Totals footer */}
               <tfoot className="border-t-2 border-gray-200 bg-gray-50/80">
                 <tr>
                   <td className="px-4 py-3 font-bold text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">
@@ -641,7 +835,7 @@ const DealerDashboard = () => {
                           >
                             {count}
                           </span>
-                          {feedbackTotals.assigned > 0 && (
+                          {feedbackTotals.assigned > 0 && count > 0 && (
                             <span className="text-[10px] text-gray-300">
                               {(
                                 (count / feedbackTotals.assigned) *

@@ -63,6 +63,28 @@ const maskPhone = (phone) => {
   return `${first} ${masked} ${last}`;
 };
 
+/* ─── CALL FEEDBACK HELPERS ────────────────────────────────────────────────── */
+// call_feedback is now an array of { stage, datetime } — latest is last item
+const getLatestFeedback = (callFeedback) => {
+  if (
+    !callFeedback ||
+    !Array.isArray(callFeedback) ||
+    callFeedback.length === 0
+  )
+    return "To Be Called";
+  return callFeedback[callFeedback.length - 1].stage || "To Be Called";
+};
+
+const formatFeedbackDatetime = (dt) => {
+  if (!dt) return null;
+  return new Date(dt).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
 /* ─── PHONE CELL COMPONENT ──────────────────────────────────────────────────── */
 // DEALER       → masked number + call icon, click = unmask + dial
 // DEALER_USER  → assigned: masked + call icon | unassigned: masked only, no call icon
@@ -1232,8 +1254,8 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
   const isDealer_User = authUser.role === "DEALER_USER";
   const [selectedStage, setSelectedStage] = useState(lead.stage);
   const [selectedCallFeedback, setSelectedCallFeedback] = useState(
-    lead.call_feedback || "",
-  ); // ✅ NEW
+    getLatestFeedback(lead.call_feedback),
+  );
   const [selectedUserId, setSelectedUserId] = useState(lead.assigned_to || "");
   const [selectedPropertyId, setSelectedPropertyId] = useState(
     lead.property_id || "",
@@ -1264,7 +1286,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
 
   const isDirty =
     selectedStage !== lead.stage ||
-    selectedCallFeedback !== (lead.call_feedback || "") || // ✅ NEW
+    selectedCallFeedback !== getLatestFeedback(lead.call_feedback) ||
     selectedUserId !== (lead.assigned_to || "") ||
     selectedPropertyId !== (lead.property_id || "") ||
     newNote.trim() !== "" ||
@@ -1320,7 +1342,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
         budget: editBudget ? Number(editBudget) : null,
         location: editLocation.trim() || null,
         stage: selectedStage,
-        call_feedback: selectedCallFeedback || null,
+        call_feedback: selectedCallFeedback || "To Be Called",
         assigned_to: isDealer_User ? lead.assigned_to : selectedUserId || null,
         assigned_name: isDealer_User
           ? lead.assigned_name
@@ -1466,7 +1488,6 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               {error}
             </div>
           )}
-
           {/* Contact Info */}
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
@@ -1512,7 +1533,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               )}
             </div>
           </div>
-          {/* ✅ Call Feedback — independent field, saved with Update Lead */}
+          {/* ✅ Call Feedback — log-based, latest entry shown selected */}
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Call Feedback
@@ -1520,21 +1541,13 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
             <div className="flex flex-wrap gap-2">
               {CALL_FEEDBACK_OPTIONS.map((option) => {
                 const colors = CALL_FEEDBACK_COLORS[option];
-                // ✅ "Assign" appears selected when nothing is chosen yet
-                const isSelected =
-                  selectedCallFeedback === option ||
-                  (option === "To Be Called" && !selectedCallFeedback);
+                const isSelected = selectedCallFeedback === option;
                 return (
                   <button
                     key={option}
                     disabled={!canEdit}
                     onClick={() => {
-                      setSelectedCallFeedback(
-                        option === "To Be Called" ||
-                          (isSelected && option === selectedCallFeedback)
-                          ? ""
-                          : option,
-                      );
+                      setSelectedCallFeedback(option);
                       setSaved(false);
                     }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
@@ -1574,7 +1587,6 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               ))}
             </div>
           </div>
-
           {/* Property */}
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
@@ -1603,7 +1615,6 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               </select>
             </div>
           </div>
-
           {/* Assigned To — DEALER only */}
           {!isDealer_User && (
             <div>
@@ -1633,7 +1644,6 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               </div>
             </div>
           )}
-
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Details
@@ -1716,7 +1726,6 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               </div>
             </div>
           </div>
-
           {/* Tasks & Follow-ups — only visible when user can edit this lead */}
           {canEdit && (
             <div>
@@ -2285,18 +2294,20 @@ const LeadManagement = () => {
                         <StageBadge stage={lead.stage} />
                       </td>
                       <td className="px-4 py-3">
-                        {lead.call_feedback ? (
-                          <span
-                            className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap
-                              ${CALL_FEEDBACK_COLORS[lead.call_feedback]?.bg || "bg-gray-100"}
-                              ${CALL_FEEDBACK_COLORS[lead.call_feedback]?.text || "text-gray-500"}
-                            `}
-                          >
-                            {lead.call_feedback}
-                          </span>
-                        ) : (
-                          <span className="text-gray-300">—</span>
-                        )}
+                        {(() => {
+                          const latest = getLatestFeedback(lead.call_feedback);
+                          const colors = CALL_FEEDBACK_COLORS[latest] || {
+                            bg: "bg-gray-100",
+                            text: "text-gray-500",
+                          };
+                          return (
+                            <span
+                              className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${colors.bg} ${colors.text}`}
+                            >
+                              {latest}
+                            </span>
+                          );
+                        })()}
                       </td>
                       {/* Assigned To — DEALER only */}
                       {!isDealer_User && (
