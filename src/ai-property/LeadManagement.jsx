@@ -2172,20 +2172,27 @@ const LeadManagement = () => {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
                   <tr>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                      #
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                      Assign Date
+                    </th>
                     <th
                       onClick={() => handleSort("lead")}
                       className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition"
                     >
-                      Lead <SortIcon colKey="lead" sortConfig={sortConfig} />
+                      Customer Name{" "}
+                      <SortIcon colKey="lead" sortConfig={sortConfig} />
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
-                      Phone
+                      Number
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
-                      Property
+                      Call Feedback
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
-                      Location
+                      BHK
                     </th>
                     <th
                       onClick={() => handleSort("budget")}
@@ -2195,37 +2202,51 @@ const LeadManagement = () => {
                       <SortIcon colKey="budget" sortConfig={sortConfig} />
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
-                      Stage
+                      Possession
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
-                      Call Feedback
+                      Stage
                     </th>
                     {!isDealer_User && (
                       <th
                         onClick={() => handleSort("assigned")}
                         className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition"
                       >
-                        Assigned To{" "}
+                        Assign To{" "}
                         <SortIcon colKey="assigned" sortConfig={sortConfig} />
                       </th>
                     )}
-                    {isDealer_User ? (
+                    {isDealer_User && (
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
                         Status
                       </th>
-                    ) : (
-                      <th className="px-4 py-3" />
                     )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {paginated.map((lead) => (
+                  {paginated.map((lead, index) => (
                     <tr
                       key={lead.id}
                       onClick={() => setSelectedLead(lead)}
                       className="hover:bg-indigo-50/40 transition cursor-pointer"
                     >
-                      {/* Lead */}
+                      {/* 1. Lead ID */}
+                      <td className="px-4 py-3 text-xs font-bold text-gray-400 whitespace-nowrap">
+                        {(page - 1) * rowsPerPage + index + 1}
+                      </td>
+
+                      {/* 2. Assign Date */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {lead.assigned_at ? (
+                          <span className="text-xs text-gray-600">
+                            {lead.assigned_at}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
+                      </td>
+
+                      {/* 3. Customer Name */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
@@ -2243,56 +2264,21 @@ const LeadManagement = () => {
                                 </span>
                               )}
                             </div>
-                            {/* ✅ Assigned date shown below name */}
-                            {lead.assigned_at ? (
-                              <span className="text-[11px] text-gray-400 whitespace-nowrap">
-                                Assigned {lead.assigned_at}
-                              </span>
-                            ) : (
-                              <span className="text-[11px] text-gray-300 whitespace-nowrap">
-                                Not assigned
-                              </span>
-                            )}
                           </div>
                         </div>
                       </td>
 
-                      {/* ✅ Phone — masked with hover reveal + tap-to-call */}
+                      {/* 4. Number */}
                       <td className="px-4 py-3">
                         <PhoneCell
                           phone={lead.contact_phone}
                           canCall={
-                            !isDealer_User || // DEALER always can
-                            lead.assigned_to === authUser.id // DEALER_USER only if assigned
+                            !isDealer_User || lead.assigned_to === authUser.id
                           }
                         />
                       </td>
 
-                      {/* Property */}
-                      <td className="px-4 py-3 text-gray-500 max-w-[140px] truncate">
-                        {lead.property_name || (
-                          <span className="text-gray-300">—</span>
-                        )}
-                      </td>
-
-                      {/* Location */}
-                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
-                        {lead.location || (
-                          <span className="text-gray-300">—</span>
-                        )}
-                      </td>
-
-                      {/* Budget */}
-                      <td className="px-4 py-3 font-semibold text-gray-800 whitespace-nowrap">
-                        {lead.budget
-                          ? `₹${(lead.budget / 100000).toFixed(0)}L`
-                          : "—"}
-                      </td>
-
-                      {/* Stage */}
-                      <td className="px-4 py-3">
-                        <StageBadge stage={lead.stage} />
-                      </td>
+                      {/* 5. Call Feedback */}
                       <td className="px-4 py-3">
                         {(() => {
                           const latest = getLatestFeedback(lead.call_feedback);
@@ -2309,7 +2295,34 @@ const LeadManagement = () => {
                           );
                         })()}
                       </td>
-                      {/* Assigned To — DEALER only */}
+
+                      {/* 6. BHK */}
+                      <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">
+                        {lead.bhk || <span className="text-gray-300">—</span>}
+                      </td>
+
+                      {/* 7. Budget */}
+                      <td className="px-4 py-3 font-semibold text-gray-800 whitespace-nowrap text-xs">
+                        {lead.budget ? (
+                          `₹${(lead.budget / 100000).toFixed(0)}L`
+                        ) : (
+                          <span className="text-gray-300 font-normal">—</span>
+                        )}
+                      </td>
+
+                      {/* 8. Possession */}
+                      <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">
+                        {lead.possession || (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
+
+                      {/* 9. Stage */}
+                      <td className="px-4 py-3">
+                        <StageBadge stage={lead.stage} />
+                      </td>
+
+                      {/* 10. Assign To — DEALER only */}
                       {!isDealer_User && (
                         <td className="px-4 py-3 whitespace-nowrap text-xs">
                           {lead.assigned_name ? (
@@ -2325,7 +2338,7 @@ const LeadManagement = () => {
                       )}
 
                       {/* Status / Assign — DEALER_USER */}
-                      {isDealer_User ? (
+                      {isDealer_User && (
                         <td
                           className="px-4 py-3"
                           onClick={(e) => e.stopPropagation()}
@@ -2355,10 +2368,6 @@ const LeadManagement = () => {
                               {lead.assigned_name || "Assigned"}
                             </span>
                           )}
-                        </td>
-                      ) : (
-                        <td className="px-4 py-3">
-                          <ChevronRight size={16} className="text-gray-300" />
                         </td>
                       )}
                     </tr>
