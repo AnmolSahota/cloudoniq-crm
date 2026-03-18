@@ -11,9 +11,7 @@ import {
   LogOut,
   Megaphone,
   Menu,
-  MessageSquare,
   Plus,
-  ShieldCheck,
   Star,
   UserCog,
   Users,
@@ -34,16 +32,15 @@ import TaskFollowUp from "./TaskFollowups";
 // Existing Dealer Views
 import AddPropertyForm from "./AddPropertyForm";
 import ManageProperties from "./ManageProperties";
-import Chat from "./Testing";
 
 // Super Admin Views
 import CreateDealer from "./CreateDealer";
 import DealerOverview from "./DealerOverview";
+import DealerUserDashboard from "./DealerUserDashboard";
 import FeatureAccess from "./FeatureAccess";
 import LeadsVisits from "./LeadsVisits";
 import ManageDealers from "./ManageDealers";
 import TopDealers from "./TopDealers";
-import DealerUserDashboard from "./DealerUserDashboard";
 
 /* ── Nav Config ─────────────────────────────────────────────────────────────── */
 const NAV_CONFIG = {
@@ -258,10 +255,23 @@ const ROLE_BRAND = {
 };
 
 /* ── Helper: avatar initials ─────────────────────────────────────────────── */
-const getAvatarInitials = (role) => {
-  if (role === "SUPER_ADMIN") return "SA";
-  if (role === "DEALER_USER") return "U";
-  return "D";
+const getAvatarInitials = (name) => {
+  if (!name) return "D";
+  return name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+};
+
+const getBusinessName = () => {
+  const authUser = JSON.parse(localStorage.getItem("auth_user")) || {};
+  return (
+    authUser.dealer_business_name ||
+    authUser.dealer?.business_name ||
+    "PropPilot CRM"
+  );
 };
 
 /* ── Dashboard ────────────────────────────────────────────────────────────── */
@@ -325,7 +335,6 @@ export default function Dashboard() {
     <>
       <div className="p-5 border-b border-gray-100">
         <div className="flex items-center gap-3">
-          {/* Finayer Logo */}
           <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 shadow-lg">
             <img
               src="/Finayer Logo.png"
@@ -333,12 +342,13 @@ export default function Dashboard() {
               className="w-full h-full object-contain"
             />
           </div>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-base font-black text-gray-800 leading-none">
               PropPilot CRM
             </h1>
-            <p className="text-xs text-indigo-500 font-semibold mt-0.5">
-              {brand.label}
+            {/* ✅ Show business name instead of "Dealer" / "User" */}
+            <p className="text-xs text-indigo-500 font-semibold mt-0.5 truncate">
+              {getBusinessName()}
             </p>
           </div>
         </div>
