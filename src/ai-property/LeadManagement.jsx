@@ -72,7 +72,17 @@ const getLatestFeedback = (callFeedback) => {
     callFeedback.length === 0
   )
     return "To Be Called";
-  return callFeedback[callFeedback.length - 1].stage || "To Be Called";
+  const last = callFeedback[callFeedback.length - 1];
+  // ✅ guard — if last is an object with stage, extract it; if it's already a string, use it
+  if (
+    last &&
+    typeof last === "object" &&
+    typeof last.stage === "string" &&
+    last.stage.trim()
+  )
+    return last.stage.trim();
+  if (typeof last === "string" && last.trim()) return last.trim();
+  return "To Be Called";
 };
 
 const formatFeedbackDatetime = (dt) => {
@@ -1989,47 +1999,57 @@ const LeadManagement = () => {
 
     return [...result].sort((a, b) => {
       let aVal, bVal;
+
       if (sortConfig.key === "lead") {
-        aVal = (a.contact_name || "").toLowerCase();
-        bVal = (b.contact_name || "").toLowerCase();
+        aVal = String(a.contact_name || "").toLowerCase();
+        bVal = String(b.contact_name || "").toLowerCase();
       } else if (sortConfig.key === "budget") {
-        aVal = a.budget ?? -1;
-        bVal = b.budget ?? -1;
+        aVal = typeof a.budget === "number" ? a.budget : -1;
+        bVal = typeof b.budget === "number" ? b.budget : -1;
       } else if (sortConfig.key === "assigned") {
-        aVal = (a.assigned_name || "").toLowerCase();
-        bVal = (b.assigned_name || "").toLowerCase();
+        aVal = String(a.assigned_name || "").toLowerCase();
+        bVal = String(b.assigned_name || "").toLowerCase();
       } else if (sortConfig.key === "assigned_at") {
-        aVal = a.assigned_at || "";
-        bVal = b.assigned_at || "";
+        aVal = String(a.assigned_at || "");
+        bVal = String(b.assigned_at || "");
       } else if (sortConfig.key === "call_feedback") {
-        aVal = (
-          a.call_feedback?.[a.call_feedback.length - 1]?.stage || ""
-        ).toLowerCase();
-        bVal = (
-          b.call_feedback?.[b.call_feedback.length - 1]?.stage || ""
-        ).toLowerCase();
+        // ✅ call_feedback is an array — must check Array.isArray before accessing
+        const aArr = Array.isArray(a.call_feedback) ? a.call_feedback : [];
+        const bArr = Array.isArray(b.call_feedback) ? b.call_feedback : [];
+        const aLast = aArr.length > 0 ? aArr[aArr.length - 1] : null;
+        const bLast = bArr.length > 0 ? bArr[bArr.length - 1] : null;
+        aVal =
+          aLast && typeof aLast.stage === "string"
+            ? aLast.stage.toLowerCase()
+            : "";
+        bVal =
+          bLast && typeof bLast.stage === "string"
+            ? bLast.stage.toLowerCase()
+            : "";
       } else if (sortConfig.key === "bhk") {
-        aVal = (a.bhk || "").toLowerCase();
-        bVal = (b.bhk || "").toLowerCase();
+        aVal = String(a.bhk || "").toLowerCase();
+        bVal = String(b.bhk || "").toLowerCase();
       } else if (sortConfig.key === "possession") {
-        aVal = a.possession || "";
-        bVal = b.possession || "";
+        aVal = String(a.possession || "");
+        bVal = String(b.possession || "");
       } else if (sortConfig.key === "stage") {
-        aVal = (a.stage || "").toLowerCase();
-        bVal = (b.stage || "").toLowerCase();
+        aVal = String(a.stage || "").toLowerCase();
+        bVal = String(b.stage || "").toLowerCase();
       } else if (sortConfig.key === "location") {
-        aVal = (a.location || "").toLowerCase();
-        bVal = (b.location || "").toLowerCase();
+        aVal = String(a.location || "").toLowerCase();
+        bVal = String(b.location || "").toLowerCase();
       } else if (sortConfig.key === "status") {
-        // ✅ Sort order: unassigned first → mine → others
         const getStatusOrder = (lead) => {
-          if (!lead.assigned_to) return 0; // Unassigned
-          if (lead.assigned_to === authUser.id) return 1; // Mine
-          return 2; // Assigned to others
+          if (!lead.assigned_to) return 0;
+          if (lead.assigned_to === authUser.id) return 1;
+          return 2;
         };
         aVal = getStatusOrder(a);
         bVal = getStatusOrder(b);
+      } else {
+        return 0;
       }
+
       if (aVal < bVal) return sortConfig.dir === "asc" ? -1 : 1;
       if (aVal > bVal) return sortConfig.dir === "asc" ? 1 : -1;
       return 0;
