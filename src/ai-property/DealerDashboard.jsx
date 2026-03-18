@@ -24,8 +24,11 @@ import {
   STAGE_COLORS,
 } from "./mockData";
 
-const getDealerId = () =>
-  JSON.parse(localStorage.getItem("auth_user"))?.id || "";
+const getDealerId = () => {
+  const user = JSON.parse(localStorage.getItem("auth_user")) || {};
+  // ✅ DEALER → their own id; DEALER_USER should not land on this dashboard
+  return user.dealer_id || user.id || "";
+};
 
 const getDealerInfo = () => {
   try {
@@ -391,18 +394,24 @@ const DealerDashboard = () => {
       return "To Be Called";
 
     if (!feedbackDateRange) {
-      // No filter — just latest entry
-      return callFeedback[callFeedback.length - 1].stage || "To Be Called";
+      const last = callFeedback[callFeedback.length - 1];
+      // ✅ guard — stage must be a non-empty string
+      return last && typeof last.stage === "string" && last.stage.trim()
+        ? last.stage.trim()
+        : "To Be Called";
     }
 
-    // Find the latest entry whose datetime falls within the range
     const inRange = [...callFeedback].reverse().find((entry) => {
       if (!entry.datetime) return false;
       const dt = new Date(entry.datetime);
       return dt >= feedbackDateRange.from && dt <= feedbackDateRange.to;
     });
 
-    return inRange ? inRange.stage : null; // null = lead had no activity in range
+    // ✅ guard — ensure inRange.stage is a string before returning
+    if (!inRange) return null;
+    return typeof inRange.stage === "string" && inRange.stage.trim()
+      ? inRange.stage.trim()
+      : null;
   };
 
   // ── Call Feedback report — grouped by assigned user, filtered by date ───────
@@ -413,7 +422,10 @@ const DealerDashboard = () => {
       if (!lead.assigned_to) return;
 
       const latestStage = getFilteredLatestFeedback(lead.call_feedback);
-      if (latestStage === null) return; // no activity in selected range — skip
+      if (latestStage === null) return;
+
+      // ✅ guard — skip if stage is not a usable string
+      if (typeof latestStage !== "string" || !latestStage.trim()) return;
 
       const key = lead.assigned_to;
 
@@ -429,7 +441,8 @@ const DealerDashboard = () => {
 
       userMap[key].assigned += 1;
 
-      const feedbackKey = optionToKey(latestStage);
+      // ✅ guard — convert to key safely
+      const feedbackKey = optionToKey(latestStage.trim());
       if (userMap[key][feedbackKey] !== undefined) {
         userMap[key][feedbackKey] += 1;
       }
