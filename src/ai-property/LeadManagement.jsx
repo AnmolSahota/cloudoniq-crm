@@ -9,6 +9,7 @@ import {
   ArrowUpDown,
   Building2,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -22,6 +23,7 @@ import {
   Trash2,
   Upload,
   UserCircle,
+  Users,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -50,21 +52,18 @@ const inputCls =
   "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none " +
   "focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition bg-gray-50 focus:bg-white";
 
-/* ─── PHONE MASKING HELPERS ─────────────────────────────────────────────────── */
-// Industry standard: show first 2 + last 2 digits, mask middle
-// e.g. 9876543210 → 98 •••••• 10
+/* ─── PHONE MASKING ─────────────────────────────────────────────────────────── */
 const maskPhone = (phone) => {
   if (!phone) return "—";
   const digits = phone.replace(/\D/g, "");
-  if (digits.length < 6) return phone; // too short to mask
+  if (digits.length < 6) return phone;
   const first = digits.slice(0, 2);
   const last = digits.slice(-2);
   const masked = "•".repeat(digits.length - 4);
   return `${first} ${masked} ${last}`;
 };
 
-/* ─── CALL FEEDBACK HELPERS ────────────────────────────────────────────────── */
-// call_feedback is now an array of { stage, datetime } — latest is last item
+/* ─── CALL FEEDBACK HELPERS ─────────────────────────────────────────────────── */
 const getLatestFeedback = (callFeedback) => {
   if (
     !callFeedback ||
@@ -73,7 +72,6 @@ const getLatestFeedback = (callFeedback) => {
   )
     return "To Be Called";
   const last = callFeedback[callFeedback.length - 1];
-  // ✅ guard — if last is an object with stage, extract it; if it's already a string, use it
   if (
     last &&
     typeof last === "object" &&
@@ -85,25 +83,18 @@ const getLatestFeedback = (callFeedback) => {
   return "To Be Called";
 };
 
-/* ─── PHONE CELL COMPONENT ──────────────────────────────────────────────────── */
-// DEALER       → masked number + call icon, click = unmask + dial
-// DEALER_USER  → assigned: masked + call icon | unassigned: masked only, no call icon
+/* ─── PHONE CELL ─────────────────────────────────────────────────────────────── */
 const PhoneCell = ({ phone, canCall, className = "" }) => {
   const [revealed, setRevealed] = useState(false);
-
   if (!phone) return <span className="text-gray-300">—</span>;
-
   return (
     <div
       className={"flex items-center gap-1.5 " + className}
       onClick={(e) => e.stopPropagation()}
     >
-      {/* ✅ Masked by default, full number shown after call click */}
       <span className="text-gray-600 text-sm font-mono whitespace-nowrap">
         {revealed ? phone : maskPhone(phone)}
       </span>
-
-      {/* ✅ Call icon — only shown when canCall, click unmasks + dials */}
       {canCall && (
         <a
           href={"tel:" + phone.replace(/\D/g, "")}
@@ -118,13 +109,10 @@ const PhoneCell = ({ phone, canCall, className = "" }) => {
   );
 };
 
-/* ─── PHONE INPUT WITH CALL BUTTON ──────────────────────────────────────────── */
-// disabled (view mode) → masked number as text + call icon (same as table)
-// enabled  (edit mode) → editable input + call button on right
+/* ─── PHONE INPUT ────────────────────────────────────────────────────────────── */
 const PhoneInput = ({ value, disabled, onChange, placeholder, canCall }) => {
   const [revealed, setRevealed] = useState(false);
 
-  // ✅ VIEW MODE — show masked number + call icon, same pattern as PhoneCell
   if (disabled) {
     return (
       <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
@@ -140,12 +128,10 @@ const PhoneInput = ({ value, disabled, onChange, placeholder, canCall }) => {
             <span className="text-gray-300">No number</span>
           )}
         </span>
-        {/* ✅ Call icon — only if canCall, click unmasks + dials */}
         {value && canCall && (
           <a
             href={"tel:" + value.replace(/\D/g, "")}
             className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 text-[10px] font-semibold hover:bg-emerald-100 transition shrink-0"
-            title={"Call " + value}
             onClick={(e) => {
               e.stopPropagation();
               setRevealed(true);
@@ -154,17 +140,10 @@ const PhoneInput = ({ value, disabled, onChange, placeholder, canCall }) => {
             <Phone size={10} /> Call
           </a>
         )}
-        {/* ✅ Masked only — no call icon for unassigned DEALER_USER */}
-        {value && !canCall && (
-          <span className="text-[10px] text-gray-300 font-mono">
-            {maskPhone(value)}
-          </span>
-        )}
       </div>
     );
   }
 
-  // ✅ EDIT MODE — standard editable input with call button
   return (
     <div className="relative">
       <Phone
@@ -180,7 +159,6 @@ const PhoneInput = ({ value, disabled, onChange, placeholder, canCall }) => {
       {value && canCall && (
         <a
           href={"tel:" + value.replace(/\D/g, "")}
-          title={"Call " + value}
           className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 text-[10px] font-semibold hover:bg-emerald-100 transition"
           onClick={(e) => e.stopPropagation()}
         >
@@ -191,7 +169,7 @@ const PhoneInput = ({ value, disabled, onChange, placeholder, canCall }) => {
   );
 };
 
-// ── Shared hook: active DEALER_USERs ─────────────────────────────────────────
+/* ─── HOOKS ──────────────────────────────────────────────────────────────────── */
 const useDealerUsers = () => {
   const [users, setUsers] = useState([]);
   useEffect(() => {
@@ -205,34 +183,24 @@ const useDealerUsers = () => {
   return users;
 };
 
-// ── Shared hook: fetch dealer properties ─────────────────────────────────────
 const useProperties = () => {
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
-
   useEffect(() => {
-    const fetchProperties = async () => {
-      try {
-        const response = await axios.get(`${BASE_URL}/properties/list`, {
-          params: { dealer_id: getDealerId() },
-        });
-        if (response.data.success) {
-          setProperties(response.data.properties || []);
-        }
-      } catch (error) {
-        console.error("Error fetching properties:", error);
-        setProperties([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchProperties();
+    axios
+      .get(`${BASE_URL}/properties/list`, {
+        params: { dealer_id: getDealerId() },
+      })
+      .then((res) => {
+        if (res.data.success) setProperties(res.data.properties || []);
+      })
+      .catch(() => setProperties([]))
+      .finally(() => setLoading(false));
   }, []);
-
   return { properties, loading };
 };
 
-/* ── Sample Excel download ───────────────────────────────────────────────────── */
+/* ─── SAMPLE EXCEL ───────────────────────────────────────────────────────────── */
 const downloadSampleExcel = () => {
   const ws = XLSX.utils.aoa_to_sheet([
     ["name", "phone", "email", "property", "budget", "location"],
@@ -253,7 +221,131 @@ const downloadSampleExcel = () => {
   XLSX.writeFile(wb, "lead_import_sample.xlsx");
 };
 
-/* ── Import Panel ────────────────────────────────────────────────────────────── */
+/* ─── MONTH YEAR PICKER ──────────────────────────────────────────────────────── */
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+const MonthYearPicker = ({ value, onChange, disabled }) => {
+  const [open, setOpen] = useState(false);
+  const today = new Date();
+  const [pickerYear, setPickerYear] = useState(today.getFullYear());
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const fn = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, []);
+
+  if (disabled) {
+    return (
+      <div className={`${inputCls} text-gray-600`}>
+        {value || <span className="text-gray-300">Not set</span>}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`${inputCls} text-left flex items-center justify-between`}
+      >
+        <span className={value ? "text-gray-800" : "text-gray-400"}>
+          {value || "Select possession date"}
+        </span>
+        <ChevronRight
+          size={14}
+          className={`text-gray-400 transition-transform shrink-0 ${open ? "rotate-90" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-64 bg-white rounded-2xl border border-gray-200 shadow-2xl overflow-hidden">
+          <button
+            type="button"
+            onClick={() => {
+              onChange("Ready to Move");
+              setOpen(false);
+            }}
+            className={`w-full px-4 py-2.5 text-left text-xs font-semibold transition-colors border-b border-gray-100 ${
+              value === "Ready to Move"
+                ? "bg-indigo-600 text-white"
+                : "text-indigo-600 hover:bg-indigo-50"
+            }`}
+          >
+            ✓ Ready to Move
+          </button>
+          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
+            <button
+              type="button"
+              onClick={() => setPickerYear((y) => y - 1)}
+              disabled={pickerYear <= today.getFullYear()}
+              className="p-1 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <span className="font-bold text-gray-800 text-xs">
+              {pickerYear}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPickerYear((y) => y + 1)}
+              disabled={pickerYear >= today.getFullYear() + 5}
+              className="p-1 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-1 p-2">
+            {MONTH_NAMES.map((m, i) => {
+              const isSelected = value === `${m} ${pickerYear}`;
+              const isPast =
+                pickerYear === today.getFullYear() && i < today.getMonth();
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  disabled={isPast}
+                  onClick={() => {
+                    onChange(`${m} ${pickerYear}`);
+                    setOpen(false);
+                  }}
+                  className={`py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    isSelected
+                      ? "bg-indigo-600 text-white shadow"
+                      : isPast
+                        ? "text-gray-300 cursor-not-allowed"
+                        : "text-gray-700 hover:bg-indigo-50 hover:text-indigo-600"
+                  }`}
+                >
+                  {m}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ─── IMPORT PANEL ───────────────────────────────────────────────────────────── */
 const ImportPanel = ({ onClose, onImported }) => {
   const fileRef = useRef(null);
   const [preview, setPreview] = useState([]);
@@ -268,7 +360,6 @@ const ImportPanel = ({ onClose, onImported }) => {
     setError("");
     setResult(null);
     setFileName(file.name);
-
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
@@ -342,7 +433,6 @@ const ImportPanel = ({ onClose, onImported }) => {
             <X size={22} />
           </button>
         </div>
-
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
           <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
             <div className="flex items-center justify-between">
@@ -351,8 +441,7 @@ const ImportPanel = ({ onClose, onImported }) => {
                   Step 1 — Download Sample File
                 </div>
                 <div className="text-xs text-indigo-500 mt-0.5">
-                  Use this format for your data. Only name &amp; phone are
-                  required.
+                  Use this format. Only name &amp; phone are required.
                 </div>
               </div>
               <button
@@ -373,11 +462,7 @@ const ImportPanel = ({ onClose, onImported }) => {
               ].map(({ col, req }) => (
                 <span
                   key={col}
-                  className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold ${
-                    req
-                      ? "bg-indigo-200 text-indigo-800"
-                      : "bg-white border border-indigo-100 text-indigo-400"
-                  }`}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold ${req ? "bg-indigo-200 text-indigo-800" : "bg-white border border-indigo-100 text-indigo-400"}`}
                 >
                   {col}
                   {req ? " *" : ""}
@@ -385,7 +470,6 @@ const ImportPanel = ({ onClose, onImported }) => {
               ))}
             </div>
           </div>
-
           <div>
             <div className="text-sm font-semibold text-gray-700 mb-2">
               Step 2 — Upload Your File
@@ -405,13 +489,11 @@ const ImportPanel = ({ onClose, onImported }) => {
               />
             </label>
           </div>
-
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-700 text-sm font-medium">
               {error}
             </div>
           )}
-
           {preview.length > 0 && !result && (
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -488,7 +570,6 @@ const ImportPanel = ({ onClose, onImported }) => {
               </div>
             </div>
           )}
-
           {result && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
@@ -544,7 +625,6 @@ const ImportPanel = ({ onClose, onImported }) => {
             </div>
           )}
         </div>
-
         <div className="px-6 py-4 border-t flex gap-3">
           <button
             onClick={onClose}
@@ -573,6 +653,7 @@ const ImportPanel = ({ onClose, onImported }) => {
   );
 };
 
+/* ─── ADD LEAD PANEL ─────────────────────────────────────────────────────────── */
 const INIT_FORM = {
   name: "",
   phone: "",
@@ -584,141 +665,10 @@ const INIT_FORM = {
   bhk: "",
   possession: "",
 };
-/* ── Month/Year Picker ───────────────────────────────────────────────────────── */
-const MONTH_NAMES = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
-const MonthYearPicker = ({ value, onChange, disabled }) => {
-  const [open, setOpen] = useState(false);
-  const today = new Date();
-  const [pickerYear, setPickerYear] = useState(today.getFullYear());
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const handleClick = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  if (disabled) {
-    return (
-      <div className={`${inputCls} text-gray-600`}>
-        {value || <span className="text-gray-300">Not set</span>}
-      </div>
-    );
-  }
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className={`${inputCls} text-left flex items-center justify-between`}
-      >
-        <span className={value ? "text-gray-800" : "text-gray-400"}>
-          {value || "Select possession date"}
-        </span>
-        <ChevronRight
-          size={14}
-          className={`text-gray-400 transition-transform shrink-0 ${open ? "rotate-90" : ""}`}
-        />
-      </button>
-
-      {open && (
-        <div className="absolute z-50 mt-1 w-64 bg-white rounded-2xl border border-gray-200 shadow-2xl overflow-hidden">
-          {/* Ready to Move */}
-          <button
-            type="button"
-            onClick={() => {
-              onChange("Ready to Move");
-              setOpen(false);
-            }}
-            className={`w-full px-4 py-2.5 text-left text-xs font-semibold transition-colors border-b border-gray-100
-              ${
-                value === "Ready to Move"
-                  ? "bg-indigo-600 text-white"
-                  : "text-indigo-600 hover:bg-indigo-50"
-              }`}
-          >
-            ✓ Ready to Move
-          </button>
-
-          {/* Year nav */}
-          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
-            <button
-              type="button"
-              onClick={() => setPickerYear((y) => y - 1)}
-              disabled={pickerYear <= today.getFullYear()}
-              className="p-1 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition"
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <span className="font-bold text-gray-800 text-xs">
-              {pickerYear}
-            </span>
-            <button
-              type="button"
-              onClick={() => setPickerYear((y) => y + 1)}
-              disabled={pickerYear >= today.getFullYear() + 5}
-              className="p-1 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition"
-            >
-              <ChevronRight size={14} />
-            </button>
-          </div>
-
-          {/* Months grid */}
-          <div className="grid grid-cols-3 gap-1 p-2">
-            {MONTH_NAMES.map((m, i) => {
-              const isSelected = value === `${m} ${pickerYear}`;
-              const isPast =
-                pickerYear === today.getFullYear() && i < today.getMonth();
-              return (
-                <button
-                  key={m}
-                  type="button"
-                  disabled={isPast}
-                  onClick={() => {
-                    onChange(`${m} ${pickerYear}`);
-                    setOpen(false);
-                  }}
-                  className={`py-1.5 rounded-lg text-xs font-semibold transition-all
-                    ${
-                      isSelected
-                        ? "bg-indigo-600 text-white shadow"
-                        : isPast
-                          ? "text-gray-300 cursor-not-allowed"
-                          : "text-gray-700 hover:bg-indigo-50 hover:text-indigo-600"
-                    }`}
-                >
-                  {m}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 
 const AddLeadPanel = ({ onClose, onSave }) => {
   const authUser = getAuthUser();
   const isDealer_User = authUser.role === "DEALER_USER";
-
   const [form, setForm] = useState({
     ...INIT_FORM,
     assigned_to: isDealer_User ? authUser.id : "",
@@ -738,9 +688,7 @@ const AddLeadPanel = ({ onClose, onSave }) => {
     const assignedUser = isDealer_User
       ? { id: authUser.id, name: authUser.name }
       : dealerUsers.find((u) => u.id === form.assigned_to);
-
     const selectedProperty = properties.find((p) => p._id === form.property_id);
-
     setLoading(true);
     try {
       const res = await axios.post(`${BASE_URL}/leads/`, {
@@ -751,7 +699,7 @@ const AddLeadPanel = ({ onClose, onSave }) => {
         property_id: form.property_id || null,
         budget: form.budget ? Number(form.budget) : null,
         location: form.location.trim() || selectedProperty?.location || null,
-        bhk: form.bhk || null, // ✅ NEW
+        bhk: form.bhk || null,
         possession: form.possession || null,
         source: "Manual",
         assigned_to: isDealer_User ? authUser.id : form.assigned_to || null,
@@ -774,10 +722,8 @@ const AddLeadPanel = ({ onClose, onSave }) => {
   const handlePropertyChange = (propertyId) => {
     set("property_id", propertyId);
     if (propertyId) {
-      const selectedProperty = properties.find((p) => p._id === propertyId);
-      if (selectedProperty?.location && !form.location) {
-        set("location", selectedProperty.location);
-      }
+      const p = properties.find((p) => p._id === propertyId);
+      if (p?.location && !form.location) set("location", p.location);
     }
   };
 
@@ -798,7 +744,6 @@ const AddLeadPanel = ({ onClose, onSave }) => {
             <X size={22} />
           </button>
         </div>
-
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-700 text-sm font-medium">
@@ -820,7 +765,6 @@ const AddLeadPanel = ({ onClose, onSave }) => {
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">
               Phone Number <span className="text-red-500">*</span>
             </label>
-            {/* ✅ Plain input in Add form — no masking since user is typing */}
             <div className="relative">
               <Phone
                 size={15}
@@ -852,7 +796,6 @@ const AddLeadPanel = ({ onClose, onSave }) => {
               />
             </div>
           </div>
-
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">
               Property{" "}
@@ -870,31 +813,18 @@ const AddLeadPanel = ({ onClose, onSave }) => {
                 disabled={propertiesLoading}
               >
                 <option value="">— Select Property —</option>
-                {properties.map((property) => (
-                  <option key={property._id} value={property._id}>
-                    {property.project_name} — {property.location}
+                {properties.map((p) => (
+                  <option key={p._id} value={p._id}>
+                    {p.project_name} — {p.location}
                   </option>
                 ))}
               </select>
             </div>
-            {propertiesLoading && (
-              <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
-                <span className="w-3 h-3 border-2 border-gray-300 border-t-indigo-500 rounded-full animate-spin" />
-                Loading properties...
-              </p>
-            )}
-            {!propertiesLoading && properties.length === 0 && (
-              <p className="text-[11px] text-gray-400 mt-1">
-                No properties found. Add properties in Manage Properties.
-              </p>
-            )}
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                Budget (₹){" "}
-                <span className="text-gray-400 font-normal">(optional)</span>
+                Budget (₹)
               </label>
               <input
                 type="number"
@@ -906,8 +836,7 @@ const AddLeadPanel = ({ onClose, onSave }) => {
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                Location{" "}
-                <span className="text-gray-400 font-normal">(optional)</span>
+                Location
               </label>
               <input
                 className={inputCls}
@@ -917,13 +846,10 @@ const AddLeadPanel = ({ onClose, onSave }) => {
               />
             </div>
           </div>
-
-          {/* BHK + Possession — optional lead-specific fields */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                Possession{" "}
-                <span className="text-gray-400 font-normal">(optional)</span>
+                Possession
               </label>
               <MonthYearPicker
                 value={form.possession}
@@ -932,8 +858,7 @@ const AddLeadPanel = ({ onClose, onSave }) => {
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                BHK Type{" "}
-                <span className="text-gray-400 font-normal">(optional)</span>
+                BHK Type
               </label>
               <select
                 value={form.bhk}
@@ -949,7 +874,6 @@ const AddLeadPanel = ({ onClose, onSave }) => {
               </select>
             </div>
           </div>
-
           {!isDealer_User && (
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">
@@ -967,15 +891,9 @@ const AddLeadPanel = ({ onClose, onSave }) => {
                   </option>
                 ))}
               </select>
-              {dealerUsers.length === 0 && (
-                <p className="text-[11px] text-gray-400 mt-1">
-                  No active team members. Add users in Manage Users.
-                </p>
-              )}
             </div>
           )}
         </div>
-
         <div className="px-6 py-4 border-t flex gap-3">
           <button
             onClick={onClose}
@@ -992,10 +910,9 @@ const AddLeadPanel = ({ onClose, onSave }) => {
             {loading ? (
               <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
             ) : (
-              <>
-                <Plus size={15} /> Create Lead
-              </>
+              <Plus size={15} />
             )}
+            {loading ? "Creating..." : "Create Lead"}
           </button>
         </div>
       </div>
@@ -1004,7 +921,7 @@ const AddLeadPanel = ({ onClose, onSave }) => {
   );
 };
 
-/* ── Notes History ───────────────────────────────────────────────────────────── */
+/* ─── NOTES HISTORY ──────────────────────────────────────────────────────────── */
 const NotesHistory = ({ notes }) => {
   if (!notes?.length) return null;
   return (
@@ -1029,12 +946,11 @@ const NotesHistory = ({ notes }) => {
   );
 };
 
-/* ── Lead Tasks Section ──────────────────────────────────────────────────────── */
+/* ─── LEAD TASKS ─────────────────────────────────────────────────────────────── */
 const LeadTasks = ({ leadId }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAll, setShowAll] = useState(false);
-
   const PREVIEW_COUNT = 3;
 
   useEffect(() => {
@@ -1049,7 +965,6 @@ const LeadTasks = ({ leadId }) => {
   }, [leadId]);
 
   const getStatus = (t) => t.status || "pending";
-
   const STATUS_STYLE = {
     pending: { bg: "bg-gray-100", text: "text-gray-500", label: "Pending" },
     in_progress: {
@@ -1063,27 +978,19 @@ const LeadTasks = ({ leadId }) => {
       label: "Completed",
     },
   };
-
-  const TYPE_ICON = {
-    Call: "📞",
-    Meeting: "🤝",
-    Visit: "🏠",
-    Other: "📝",
-  };
-
+  const TYPE_ICON = { Call: "📞", Meeting: "🤝", Visit: "🏠", Other: "📝" };
   const fmtDate = (d) =>
     new Date(d).toLocaleDateString("en-IN", {
       day: "numeric",
       month: "short",
       year: "numeric",
     });
-
   const daysDiff = (dateStr) =>
     Math.ceil(
       (new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
     );
 
-  if (loading) {
+  if (loading)
     return (
       <div className="space-y-2">
         {[...Array(2)].map((_, i) => (
@@ -1091,33 +998,23 @@ const LeadTasks = ({ leadId }) => {
         ))}
       </div>
     );
-  }
-
-  if (tasks.length === 0) {
+  if (tasks.length === 0)
     return (
       <div className="text-center py-4 bg-gray-50 rounded-xl border border-dashed border-gray-200">
         <p className="text-xs text-gray-400 font-medium">
           No tasks linked to this lead
         </p>
-        <p className="text-[11px] text-gray-300 mt-0.5">
-          Create tasks from the Tasks & Follow-ups section
-        </p>
       </div>
     );
-  }
 
-  // ✅ Sort: non-completed first, then by date ascending (soonest first)
   const sorted = [...tasks].sort((a, b) => {
-    const aCompleted = getStatus(a) === "completed";
-    const bCompleted = getStatus(b) === "completed";
-    if (aCompleted !== bCompleted) return aCompleted ? 1 : -1;
+    const ac = getStatus(a) === "completed",
+      bc = getStatus(b) === "completed";
+    if (ac !== bc) return ac ? 1 : -1;
     return new Date(a.date) - new Date(b.date);
   });
-
   const displayed = showAll ? sorted : sorted.slice(0, PREVIEW_COUNT);
   const hasMore = sorted.length > PREVIEW_COUNT;
-
-  // ✅ Summary counts
   const pendingCount = tasks.filter((t) => getStatus(t) === "pending").length;
   const inProgressCount = tasks.filter(
     (t) => getStatus(t) === "in_progress",
@@ -1129,7 +1026,6 @@ const LeadTasks = ({ leadId }) => {
 
   return (
     <div className="space-y-2">
-      {/* ✅ Summary bar — quick glance counts */}
       <div className="flex items-center gap-2 flex-wrap mb-1">
         <span className="text-[11px] font-semibold text-gray-400">
           {tasks.length} task{tasks.length > 1 ? "s" : ""}
@@ -1150,14 +1046,11 @@ const LeadTasks = ({ leadId }) => {
           </span>
         )}
       </div>
-
-      {/* Task list */}
       {displayed.map((task) => {
         const status = getStatus(task);
         const s = STATUS_STYLE[status] || STATUS_STYLE.pending;
         const daysLeft = daysDiff(task.date);
         const isOverdue = daysLeft < 0 && status !== "completed";
-
         return (
           <div
             key={task.id}
@@ -1175,7 +1068,6 @@ const LeadTasks = ({ leadId }) => {
             <span className="text-base shrink-0 mt-0.5">
               {TYPE_ICON[task.type] || "📝"}
             </span>
-
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-semibold text-gray-700">
@@ -1197,13 +1089,11 @@ const LeadTasks = ({ leadId }) => {
                   </span>
                 )}
               </div>
-
               {task.note && (
                 <p className="text-xs text-gray-400 mt-0.5 truncate">
                   {task.note}
                 </p>
               )}
-
               <div className="flex items-center gap-3 mt-1 flex-wrap">
                 <span className="text-[11px] text-gray-400 flex items-center gap-1">
                   📅 {fmtDate(task.date)}
@@ -1229,8 +1119,6 @@ const LeadTasks = ({ leadId }) => {
           </div>
         );
       })}
-
-      {/* ✅ Show more / Show less toggle */}
       {hasMore && (
         <button
           onClick={() => setShowAll((v) => !v)}
@@ -1248,7 +1136,7 @@ const LeadTasks = ({ leadId }) => {
   );
 };
 
-/* ── Lead Detail Panel ───────────────────────────────────────────────────────── */
+/* ─── LEAD DETAIL PANEL ──────────────────────────────────────────────────────── */
 const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
   const authUser = getAuthUser();
   const isDealer_User = authUser.role === "DEALER_USER";
@@ -1267,17 +1155,14 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
   const [saved, setSaved] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
-
   const dealerUsers = useDealerUsers();
   const { properties, loading: propertiesLoading } = useProperties();
-
   const [editName, setEditName] = useState(lead.contact_name || "");
   const [editPhone, setEditPhone] = useState(lead.contact_phone || "");
   const [editBudget, setEditBudget] = useState(
     lead.budget ? String(lead.budget) : "",
   );
   const [editLocation, setEditLocation] = useState(lead.location || "");
-  // ADD after editLocation useState:
   const [editBhk, setEditBhk] = useState(lead.bhk || "");
   const [editPossession, setEditPossession] = useState(lead.possession || "");
   const isAssignedToMe = isDealer_User && lead.assigned_to === authUser.id;
@@ -1294,7 +1179,6 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
     editPhone.trim() !== (lead.contact_phone || "") ||
     editBudget !== (lead.budget ? String(lead.budget) : "") ||
     editBhk !== (lead.bhk || "") ||
-    editBhk !== (lead.bhk || "") ||
     editPossession !== (lead.possession || "") ||
     editLocation.trim() !== (lead.location || "");
 
@@ -1309,10 +1193,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
       });
       onUpdated(res.data.data);
     } catch (err) {
-      setError(
-        err.response?.data?.detail ||
-          "Failed to assign lead. Please try again.",
-      );
+      setError(err.response?.data?.detail || "Failed to assign lead.");
     } finally {
       setAssigning(false);
     }
@@ -1327,14 +1208,12 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
       setError("Phone number cannot be empty.");
       return;
     }
-
     setSaving(true);
     setError("");
     try {
       const assignedUser = isDealer_User
         ? null
         : dealerUsers.find((u) => u.id === selectedUserId);
-
       const payload = {
         dealer_id: getDealerId(),
         name: editName.trim(),
@@ -1351,21 +1230,18 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
         bhk: editBhk || null,
         possession: editPossession || null,
       };
-      if (newNote.trim()) {
+      if (newNote.trim())
         payload.new_note = {
           text: newNote.trim(),
           date: new Date().toISOString().split("T")[0],
         };
-      }
       const res = await axios.patch(`${BASE_URL}/leads/${lead.id}`, payload);
       onUpdated(res.data.data);
       setNewNote("");
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
-      setError(
-        err.response?.data?.detail || "Update failed. Please try again.",
-      );
+      setError(err.response?.data?.detail || "Update failed.");
     } finally {
       setSaving(false);
     }
@@ -1381,9 +1257,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
       onDeleted(lead.id);
       onClose();
     } catch (err) {
-      setError(
-        err.response?.data?.detail || "Delete failed. Please try again.",
-      );
+      setError(err.response?.data?.detail || "Delete failed.");
       setDeleting(false);
       setConfirmDelete(false);
     }
@@ -1406,7 +1280,6 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               <button
                 onClick={() => setConfirmDelete(true)}
                 className="text-white/60 hover:text-red-300 transition"
-                title="Delete lead"
               >
                 <Trash2 size={17} />
               </button>
@@ -1488,7 +1361,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               {error}
             </div>
           )}
-          {/* Contact Info */}
+
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Contact Info
@@ -1513,7 +1386,6 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   Phone Number <span className="text-red-500">*</span>
                 </label>
-                {/* ✅ PhoneInput — editable with tap-to-call button */}
                 <PhoneInput
                   value={editPhone}
                   disabled={!canEdit}
@@ -1522,7 +1394,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                     setSaved(false);
                   }}
                   placeholder="9876543210"
-                  canCall={!isDealer_User || isAssignedToMe} // ✅ same rule as PhoneCell
+                  canCall={!isDealer_User || isAssignedToMe}
                 />
               </div>
               {lead.contact_email && (
@@ -1533,7 +1405,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               )}
             </div>
           </div>
-          {/* ✅ Call Feedback — log-based, latest entry shown selected */}
+
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Call Feedback
@@ -1550,11 +1422,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                       setSelectedCallFeedback(option);
                       setSaved(false);
                     }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
-                      isSelected
-                        ? `${colors.bg} ${colors.text} border-transparent`
-                        : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${isSelected ? `${colors.bg} ${colors.text} border-transparent` : "border-gray-200 text-gray-600 hover:bg-gray-50"} disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     {option}
                   </button>
@@ -1562,7 +1430,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               })}
             </div>
           </div>
-          {/* Stage */}
+
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Lead Stage
@@ -1576,18 +1444,14 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                     setSelectedStage(s);
                     setSaved(false);
                   }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
-                    selectedStage === s
-                      ? `${STAGE_COLORS[s].bg} ${STAGE_COLORS[s].text} border-transparent`
-                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${selectedStage === s ? `${STAGE_COLORS[s].bg} ${STAGE_COLORS[s].text} border-transparent` : "border-gray-200 text-gray-600 hover:bg-gray-50"} disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   {s}
                 </button>
               ))}
             </div>
           </div>
-          {/* Property */}
+
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Property
@@ -1607,15 +1471,15 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                 className={`${inputCls} pl-9`}
               >
                 <option value="">— No Property —</option>
-                {properties.map((property) => (
-                  <option key={property._id} value={property._id}>
-                    {property.project_name} — {property.location}
+                {properties.map((p) => (
+                  <option key={p._id} value={p._id}>
+                    {p.project_name} — {p.location}
                   </option>
                 ))}
               </select>
             </div>
           </div>
-          {/* Assigned To — DEALER only */}
+
           {!isDealer_User && (
             <div>
               <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
@@ -1644,6 +1508,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               </div>
             </div>
           )}
+
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Details
@@ -1651,8 +1516,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                  Budget (₹){" "}
-                  <span className="text-gray-400 font-normal">(optional)</span>
+                  Budget (₹)
                 </label>
                 <input
                   type="number"
@@ -1668,8 +1532,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                  Location{" "}
-                  <span className="text-gray-400 font-normal">(optional)</span>
+                  Location
                 </label>
                 <input
                   className={inputCls}
@@ -1684,8 +1547,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                  Possession{" "}
-                  <span className="text-gray-400 font-normal">(optional)</span>
+                  Possession
                 </label>
                 <MonthYearPicker
                   value={editPossession}
@@ -1698,8 +1560,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                  BHK Type{" "}
-                  <span className="text-gray-400 font-normal">(optional)</span>
+                  BHK Type
                 </label>
                 <select
                   value={editBhk}
@@ -1726,7 +1587,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               </div>
             </div>
           </div>
-          {/* Tasks & Follow-ups — only visible when user can edit this lead */}
+
           {canEdit && (
             <div>
               <div className="flex items-center justify-between mb-3">
@@ -1743,7 +1604,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
               <LeadTasks leadId={lead.id} />
             </div>
           )}
-          {/* Notes */}
+
           <div>
             <div className="flex items-center gap-2 mb-3">
               <StickyNote size={14} className="text-amber-500" />
@@ -1790,13 +1651,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
             <button
               onClick={handleUpdate}
               disabled={(!isDirty && !saved) || saving}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2 shadow-sm ${
-                saved
-                  ? "bg-green-500 text-white cursor-default"
-                  : isDirty
-                    ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:opacity-90"
-                    : "bg-gray-100 text-gray-400 cursor-not-allowed"
-              } disabled:opacity-60`}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2 shadow-sm ${saved ? "bg-green-500 text-white cursor-default" : isDirty ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:opacity-90" : "bg-gray-100 text-gray-400 cursor-not-allowed"} disabled:opacity-60`}
             >
               {saving ? (
                 <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
@@ -1813,7 +1668,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
   );
 };
 
-/* ── Pagination ──────────────────────────────────────────────────────────────── */
+/* ─── PAGINATION ─────────────────────────────────────────────────────────────── */
 const Pagination = ({ total, page, perPage, onPerPageChange, onChange }) => {
   const totalPages = Math.ceil(total / perPage);
   const allPages = Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -1886,6 +1741,7 @@ const Pagination = ({ total, page, perPage, onPerPageChange, onChange }) => {
   );
 };
 
+/* ─── SORT ICON ──────────────────────────────────────────────────────────────── */
 const SortIcon = ({ colKey, sortConfig }) => {
   const active = sortConfig.key === colKey;
   if (active && sortConfig.dir === "asc")
@@ -1900,10 +1756,215 @@ const SortIcon = ({ colKey, sortConfig }) => {
   );
 };
 
-/* ── Main Component ──────────────────────────────────────────────────────────── */
+/* ─── BULK ASSIGN BAR ────────────────────────────────────────────────────────── */
+// All props passed in from LeadManagement — no internal state access needed
+const BulkAssignBar = ({
+  selectedIds,
+  leads,
+  dealerUsers,
+  onAssign,
+  onClear,
+  assigning,
+}) => {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [confirmModal, setConfirmModal] = useState(null);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const fn = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target))
+        setDropdownOpen(false);
+    };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, []);
+
+  if (selectedIds.size === 0) return null;
+
+  const selectedLeads = leads.filter((l) => selectedIds.has(l.id));
+  const unassignedCount = selectedLeads.filter((l) => !l.assigned_to).length;
+  const alreadyAssignedCount = selectedLeads.filter(
+    (l) => l.assigned_to,
+  ).length;
+
+  const handleUserPick = (user) => {
+    setDropdownOpen(false);
+    setConfirmModal({ user, unassignedCount, alreadyAssignedCount });
+  };
+
+  return (
+    <>
+      {/* Sticky bottom action bar */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-gray-700 whitespace-nowrap">
+        {/* Selected count badge */}
+        <div className="flex items-center gap-2">
+          <span className="w-6 h-6 rounded-lg bg-indigo-500 flex items-center justify-center text-xs font-black shrink-0">
+            {selectedIds.size}
+          </span>
+          <span className="text-sm font-semibold">leads selected</span>
+        </div>
+
+        {/* Split info — only shown when mixed */}
+        {alreadyAssignedCount > 0 && unassignedCount > 0 && (
+          <div className="flex items-center gap-1.5 text-xs border-l border-gray-700 pl-3">
+            <span className="text-amber-400 font-semibold">
+              {unassignedCount} unassigned
+            </span>
+            <span className="text-gray-500">·</span>
+            <span className="text-gray-400">
+              {alreadyAssignedCount} assigned
+            </span>
+          </div>
+        )}
+
+        {/* Assign To dropdown */}
+        <div
+          className="relative border-l border-gray-700 pl-3"
+          ref={dropdownRef}
+        >
+          <button
+            onClick={() => setDropdownOpen((v) => !v)}
+            disabled={assigning}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 transition text-sm font-semibold disabled:opacity-50"
+          >
+            <Users size={14} />
+            Assign To
+            <ChevronDown
+              size={13}
+              className={
+                "transition-transform " + (dropdownOpen ? "rotate-180" : "")
+              }
+            />
+          </button>
+
+          {dropdownOpen && (
+            <div className="absolute bottom-full mb-2 right-0 w-52 bg-white rounded-xl border border-gray-200 shadow-2xl overflow-hidden">
+              <div className="px-3 py-2 border-b border-gray-100">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Select team member
+                </p>
+              </div>
+              {dealerUsers.length === 0 ? (
+                <div className="px-3 py-3 text-xs text-gray-400 text-center">
+                  No active team members
+                </div>
+              ) : (
+                <div className="py-1 max-h-48 overflow-y-auto">
+                  {dealerUsers.map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={() => handleUserPick(u)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50 transition text-left"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                        {(u.name || "?")[0].toUpperCase()}
+                      </div>
+                      <span className="text-sm font-semibold text-gray-800 truncate">
+                        {u.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Clear selection */}
+        <button
+          onClick={onClear}
+          className="p-1.5 rounded-lg hover:bg-gray-700 transition text-gray-400 hover:text-white"
+          title="Clear selection"
+        >
+          <X size={16} />
+        </button>
+      </div>
+
+      {/* Confirmation modal */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setConfirmModal(null)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4">
+            <h3 className="font-black text-gray-900 text-base mb-1">
+              Assign to {confirmModal.user.name}?
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {selectedIds.size} lead{selectedIds.size > 1 ? "s" : ""} selected
+            </p>
+
+            {/* Summary */}
+            <div className="bg-gray-50 rounded-xl p-3 space-y-1.5 mb-5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">Unassigned leads</span>
+                <span className="font-bold text-gray-900">
+                  {confirmModal.unassignedCount}
+                </span>
+              </div>
+              {confirmModal.alreadyAssignedCount > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-amber-600 font-medium">
+                    Already assigned (will be reassigned)
+                  </span>
+                  <span className="font-bold text-amber-600">
+                    {confirmModal.alreadyAssignedCount}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {/* Only show "unassigned only" option when there's a mix */}
+              {confirmModal.alreadyAssignedCount > 0 &&
+                confirmModal.unassignedCount > 0 && (
+                  <button
+                    onClick={() => {
+                      onAssign(confirmModal.user, false);
+                      setConfirmModal(null);
+                    }}
+                    className="w-full py-2.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-semibold hover:bg-indigo-100 transition"
+                  >
+                    Assign Unassigned Only ({confirmModal.unassignedCount})
+                  </button>
+                )}
+              <button
+                onClick={() => {
+                  onAssign(confirmModal.user, true);
+                  setConfirmModal(null);
+                }}
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-semibold hover:opacity-90 transition"
+              >
+                {confirmModal.alreadyAssignedCount > 0
+                  ? "Assign All " + selectedIds.size
+                  : "Assign " +
+                    selectedIds.size +
+                    " Lead" +
+                    (selectedIds.size > 1 ? "s" : "")}
+              </button>
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="w-full py-2.5 rounded-xl border text-sm font-semibold text-gray-600 hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   MAIN COMPONENT
+   ═══════════════════════════════════════════════════════════════════════════════ */
 const LeadManagement = () => {
   const authUser = getAuthUser();
   const isDealer_User = authUser.role === "DEALER_USER";
+
+  /* ── State ── */
   const [assigningLeadId, setAssigningLeadId] = useState(null);
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1919,43 +1980,12 @@ const LeadManagement = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [sortConfig, setSortConfig] = useState({ key: null, dir: "asc" });
 
-  const handleInlineAssign = async (e, lead) => {
-    e.stopPropagation();
-    setAssigningLeadId(lead.id);
-    try {
-      const res = await axios.patch(`${BASE_URL}/leads/${lead.id}`, {
-        dealer_id: getDealerId(),
-        assigned_to: authUser.id,
-        assigned_name: authUser.name,
-      });
-      // Update leads list without opening drawer
-      const updatedLead = res.data.data;
-      setLeads((prev) =>
-        prev.map((l) => (l.id === updatedLead.id ? updatedLead : l)),
-      );
-      setUnassignedCount((c) =>
-        updatedLead.assigned_to ? Math.max(0, c - 1) : c,
-      );
-    } catch {
-      // silently fail — user can try via detail panel
-    } finally {
-      setAssigningLeadId(null);
-    }
-  };
+  // ── Bulk assignment state (DEALER only) ──────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkAssigning, setBulkAssigning] = useState(false);
+  const dealerUsersForBulk = useDealerUsers();
 
-  const handlePerPageChange = (n) => {
-    setRowsPerPage(n);
-    setPage(1);
-  };
-
-  const handleSort = (key) => {
-    setSortConfig((prev) =>
-      prev.key === key
-        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
-        : { key, dir: "asc" },
-    );
-  };
-
+  /* ── Fetch leads ── */
   useEffect(() => {
     const fetchLeads = async () => {
       try {
@@ -1976,6 +2006,104 @@ const LeadManagement = () => {
     fetchLeads();
   }, []);
 
+  /* ── Handlers ── */
+  const handleInlineAssign = async (e, lead) => {
+    e.stopPropagation();
+    setAssigningLeadId(lead.id);
+    try {
+      const res = await axios.patch(`${BASE_URL}/leads/${lead.id}`, {
+        dealer_id: getDealerId(),
+        assigned_to: authUser.id,
+        assigned_name: authUser.name,
+      });
+      const updatedLead = res.data.data;
+      setLeads((prev) =>
+        prev.map((l) => (l.id === updatedLead.id ? updatedLead : l)),
+      );
+      setUnassignedCount((c) =>
+        updatedLead.assigned_to ? Math.max(0, c - 1) : c,
+      );
+    } catch {
+      /* silently fail */
+    } finally {
+      setAssigningLeadId(null);
+    }
+  };
+
+  // ── Bulk assign handler — single API call instead of N parallel requests ─────
+  const handleBulkAssign = async (user, overwriteAssigned) => {
+    setBulkAssigning(true);
+    try {
+      // Filter on frontend first — avoids sending IDs the backend would skip anyway
+      const idsToAssign = [...selectedIds].filter((id) => {
+        if (overwriteAssigned) return true;
+        const lead = leads.find((l) => l.id === id);
+        return lead && !lead.assigned_to;
+      });
+
+      if (idsToAssign.length === 0) {
+        setSelectedIds(new Set());
+        return;
+      }
+
+      // ✅ Single bulk API call — replaces N parallel PATCH requests
+      const { data } = await axios.patch(`${BASE_URL}/leads/bulk-assign`, {
+        dealer_id: getDealerId(),
+        lead_ids: idsToAssign,
+        assigned_to: user.id,
+        assigned_name: user.name,
+        overwrite_assigned: overwriteAssigned,
+      });
+
+      // Patch local state from the returned updated leads array
+      const updatedLeads = data.data || [];
+      setLeads((prev) =>
+        prev.map((l) => {
+          const updated = updatedLeads.find((u) => u.id === l.id);
+          return updated ?? l;
+        }),
+      );
+
+      // Use backend's modified_count — more accurate than frontend guess
+      setUnassignedCount((c) => Math.max(0, c - (data.modified_count || 0)));
+      setSelectedIds(new Set());
+    } catch (err) {
+      console.error("Bulk assign error:", err);
+    } finally {
+      setBulkAssigning(false);
+    }
+  };
+
+  const handlePerPageChange = (n) => {
+    setRowsPerPage(n);
+    setPage(1);
+  };
+  const handleSort = (key) => {
+    setSortConfig((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: "asc" },
+    );
+  };
+  const resetPage = () => setPage(1);
+  const handleSave = (newLead) => setLeads((prev) => [newLead, ...prev]);
+  const handleUpdated = (updatedLead) => {
+    setLeads((prev) =>
+      prev.map((l) => (l.id === updatedLead.id ? updatedLead : l)),
+    );
+    setSelectedLead(updatedLead);
+    setUnassignedCount((c) =>
+      updatedLead.assigned_to ? Math.max(0, c - 1) : c,
+    );
+  };
+  const handleDeleted = (id) =>
+    setLeads((prev) => prev.filter((l) => l.id !== id));
+  const handleImported = (newLeads) => {
+    setLeads((prev) => [...newLeads, ...prev]);
+    setUnassignedCount((c) => c + newLeads.length);
+  };
+
+  /* ── Filtered + sorted leads ── */
   const filtered = useMemo(() => {
     const result = leads.filter((l) => {
       if (
@@ -1996,7 +2124,6 @@ const LeadManagement = () => {
 
     return [...result].sort((a, b) => {
       let aVal, bVal;
-
       if (sortConfig.key === "lead") {
         aVal = String(a.contact_name || "").toLowerCase();
         bVal = String(b.contact_name || "").toLowerCase();
@@ -2010,7 +2137,6 @@ const LeadManagement = () => {
         aVal = String(a.assigned_at || "");
         bVal = String(b.assigned_at || "");
       } else if (sortConfig.key === "call_feedback") {
-        // ✅ call_feedback is an array — must check Array.isArray before accessing
         const aArr = Array.isArray(a.call_feedback) ? a.call_feedback : [];
         const bArr = Array.isArray(b.call_feedback) ? b.call_feedback : [];
         const aLast = aArr.length > 0 ? aArr[aArr.length - 1] : null;
@@ -2036,17 +2162,11 @@ const LeadManagement = () => {
         aVal = String(a.location || "").toLowerCase();
         bVal = String(b.location || "").toLowerCase();
       } else if (sortConfig.key === "status") {
-        const getStatusOrder = (lead) => {
-          if (!lead.assigned_to) return 0;
-          if (lead.assigned_to === authUser.id) return 1;
-          return 2;
-        };
-        aVal = getStatusOrder(a);
-        bVal = getStatusOrder(b);
-      } else {
-        return 0;
-      }
-
+        const getOrder = (lead) =>
+          !lead.assigned_to ? 0 : lead.assigned_to === authUser.id ? 1 : 2;
+        aVal = getOrder(a);
+        bVal = getOrder(b);
+      } else return 0;
       if (aVal < bVal) return sortConfig.dir === "asc" ? -1 : 1;
       if (aVal > bVal) return sortConfig.dir === "asc" ? 1 : -1;
       return 0;
@@ -2057,29 +2177,23 @@ const LeadManagement = () => {
     () => filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage),
     [filtered, page, rowsPerPage],
   );
-
-  const resetPage = () => setPage(1);
-
-  const handleSave = (newLead) => setLeads((prev) => [newLead, ...prev]);
-  const handleUpdated = (updatedLead) => {
-    setLeads((prev) =>
-      prev.map((l) => (l.id === updatedLead.id ? updatedLead : l)),
-    );
-    setSelectedLead(updatedLead);
-    setUnassignedCount((c) =>
-      updatedLead.assigned_to ? Math.max(0, c - 1) : c,
-    );
-  };
-  const handleDeleted = (id) =>
-    setLeads((prev) => prev.filter((l) => l.id !== id));
-  const handleImported = (newLeads) => {
-    setLeads((prev) => [...newLeads, ...prev]);
-    setUnassignedCount((c) => c + newLeads.length);
-  };
-
   const hasFilters =
     search || filterStage !== "All" || filterAssigned !== "All";
 
+  // ── Header checkbox helpers ──────────────────────────────────────────────────
+  const allOnPageSelected =
+    paginated.length > 0 && paginated.every((l) => selectedIds.has(l.id));
+  const someOnPageSelected = paginated.some((l) => selectedIds.has(l.id));
+
+  const togglePageSelection = (checked) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      paginated.forEach((l) => (checked ? next.add(l.id) : next.delete(l.id)));
+      return next;
+    });
+  };
+
+  /* ═══════════════════════ RENDER ═══════════════════════ */
   return (
     <div className="p-6 space-y-5">
       <PageHeader
@@ -2122,7 +2236,7 @@ const LeadManagement = () => {
             <p className="text-xs text-amber-600 mt-0.5">
               {isDealer_User
                 ? 'You can claim unassigned leads by clicking "Assign to Me" in the table.'
-                : "Unassigned leads may not be followed up. Open each lead and assign a team member."}
+                : "Unassigned leads may not be followed up. Select leads below to bulk assign."}
             </p>
           </div>
           <button
@@ -2165,7 +2279,6 @@ const LeadManagement = () => {
             <option key={s}>{s}</option>
           ))}
         </select>
-
         {!isDealer_User && (
           <select
             value={filterAssigned}
@@ -2220,12 +2333,31 @@ const LeadManagement = () => {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b sticky top-0 z-10 shadow-sm">
                   <tr>
-                    {/* # — no sort */}
+                    {/* ✅ Checkbox header — DEALER only */}
+                    {!isDealer_User && (
+                      <th
+                        className="px-4 py-3 bg-gray-50 w-10"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
+                          checked={allOnPageSelected}
+                          ref={(el) => {
+                            if (el)
+                              el.indeterminate =
+                                someOnPageSelected && !allOnPageSelected;
+                          }}
+                          onChange={(e) =>
+                            togglePageSelection(e.target.checked)
+                          }
+                          title="Select all on this page"
+                        />
+                      </th>
+                    )}
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap bg-gray-50">
                       #
                     </th>
-
-                    {/* Assign Date — sortable */}
                     <th
                       onClick={() => handleSort("assigned_at")}
                       className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition bg-gray-50"
@@ -2233,8 +2365,6 @@ const LeadManagement = () => {
                       Assign Date{" "}
                       <SortIcon colKey="assigned_at" sortConfig={sortConfig} />
                     </th>
-
-                    {/* Customer Name — sortable */}
                     <th
                       onClick={() => handleSort("lead")}
                       className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition bg-gray-50"
@@ -2242,13 +2372,9 @@ const LeadManagement = () => {
                       Customer Name{" "}
                       <SortIcon colKey="lead" sortConfig={sortConfig} />
                     </th>
-
-                    {/* Number — static */}
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap bg-gray-50">
                       Number
                     </th>
-
-                    {/* Call Feedback — sortable */}
                     <th
                       onClick={() => handleSort("call_feedback")}
                       className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition bg-gray-50"
@@ -2259,16 +2385,12 @@ const LeadManagement = () => {
                         sortConfig={sortConfig}
                       />
                     </th>
-
-                    {/* BHK — sortable */}
                     <th
                       onClick={() => handleSort("bhk")}
                       className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition bg-gray-50"
                     >
                       BHK <SortIcon colKey="bhk" sortConfig={sortConfig} />
                     </th>
-
-                    {/* Budget — sortable */}
                     <th
                       onClick={() => handleSort("budget")}
                       className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition bg-gray-50"
@@ -2276,8 +2398,6 @@ const LeadManagement = () => {
                       Budget{" "}
                       <SortIcon colKey="budget" sortConfig={sortConfig} />
                     </th>
-
-                    {/* Possession — sortable */}
                     <th
                       onClick={() => handleSort("possession")}
                       className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition bg-gray-50"
@@ -2285,8 +2405,6 @@ const LeadManagement = () => {
                       Possession{" "}
                       <SortIcon colKey="possession" sortConfig={sortConfig} />
                     </th>
-
-                    {/* Location — sortable */}
                     <th
                       onClick={() => handleSort("location")}
                       className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition bg-gray-50"
@@ -2294,16 +2412,12 @@ const LeadManagement = () => {
                       Location{" "}
                       <SortIcon colKey="location" sortConfig={sortConfig} />
                     </th>
-
-                    {/* Stage — sortable */}
                     <th
                       onClick={() => handleSort("stage")}
                       className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition bg-gray-50"
                     >
                       Stage <SortIcon colKey="stage" sortConfig={sortConfig} />
                     </th>
-
-                    {/* Assign To — sortable, DEALER only */}
                     {!isDealer_User && (
                       <th
                         onClick={() => handleSort("assigned")}
@@ -2313,8 +2427,6 @@ const LeadManagement = () => {
                         <SortIcon colKey="assigned" sortConfig={sortConfig} />
                       </th>
                     )}
-
-                    {/* Status — DEALER_USER only */}
                     {isDealer_User && (
                       <th
                         onClick={() => handleSort("status")}
@@ -2326,19 +2438,46 @@ const LeadManagement = () => {
                     )}
                   </tr>
                 </thead>
+
                 <tbody className="divide-y divide-gray-50">
                   {paginated.map((lead, index) => (
                     <tr
                       key={lead.id}
                       onClick={() => setSelectedLead(lead)}
-                      className="hover:bg-indigo-50/40 transition cursor-pointer"
+                      className={
+                        "hover:bg-indigo-50/40 transition cursor-pointer " +
+                        (selectedIds.has(lead.id) ? "bg-indigo-50/60" : "")
+                      }
                     >
-                      {/* 1. # */}
+                      {/* ✅ Checkbox cell — DEALER only */}
+                      {!isDealer_User && (
+                        <td
+                          className="px-4 py-3 w-10"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
+                            checked={selectedIds.has(lead.id)}
+                            onChange={(e) => {
+                              setSelectedIds((prev) => {
+                                const next = new Set(prev);
+                                e.target.checked
+                                  ? next.add(lead.id)
+                                  : next.delete(lead.id);
+                                return next;
+                              });
+                            }}
+                          />
+                        </td>
+                      )}
+
+                      {/* # */}
                       <td className="px-4 py-3 text-xs font-bold text-gray-400 whitespace-nowrap">
                         {(page - 1) * rowsPerPage + index + 1}
                       </td>
 
-                      {/* 2. Assign Date */}
+                      {/* Assign Date */}
                       <td className="px-4 py-3 whitespace-nowrap">
                         {lead.assigned_at ? (
                           <span className="text-xs text-gray-600">
@@ -2349,7 +2488,7 @@ const LeadManagement = () => {
                         )}
                       </td>
 
-                      {/* 3. Customer Name */}
+                      {/* Customer Name */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
@@ -2371,7 +2510,7 @@ const LeadManagement = () => {
                         </div>
                       </td>
 
-                      {/* 4. Number */}
+                      {/* Number */}
                       <td className="px-4 py-3">
                         <PhoneCell
                           phone={lead.contact_phone}
@@ -2381,7 +2520,7 @@ const LeadManagement = () => {
                         />
                       </td>
 
-                      {/* 5. Call Feedback */}
+                      {/* Call Feedback */}
                       <td className="px-4 py-3">
                         {(() => {
                           const latest = getLatestFeedback(lead.call_feedback);
@@ -2404,12 +2543,12 @@ const LeadManagement = () => {
                         })()}
                       </td>
 
-                      {/* 6. BHK */}
+                      {/* BHK */}
                       <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">
                         {lead.bhk || <span className="text-gray-300">—</span>}
                       </td>
 
-                      {/* 7. Budget */}
+                      {/* Budget */}
                       <td className="px-4 py-3 font-semibold text-gray-800 whitespace-nowrap text-xs">
                         {lead.budget ? (
                           "₹" + (lead.budget / 100000).toFixed(0) + "L"
@@ -2418,26 +2557,26 @@ const LeadManagement = () => {
                         )}
                       </td>
 
-                      {/* 8. Possession */}
+                      {/* Possession */}
                       <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">
                         {lead.possession || (
                           <span className="text-gray-300">—</span>
                         )}
                       </td>
 
-                      {/* 9. Location — NEW */}
+                      {/* Location */}
                       <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">
                         {lead.location || (
                           <span className="text-gray-300">—</span>
                         )}
                       </td>
 
-                      {/* 10. Stage */}
+                      {/* Stage */}
                       <td className="px-4 py-3">
                         <StageBadge stage={lead.stage} />
                       </td>
 
-                      {/* 11. Assign To — DEALER only */}
+                      {/* Assign To — DEALER only */}
                       {!isDealer_User && (
                         <td className="px-4 py-3 whitespace-nowrap text-xs">
                           {lead.assigned_name ? (
@@ -2452,7 +2591,7 @@ const LeadManagement = () => {
                         </td>
                       )}
 
-                      {/* 12. Status / Assign — DEALER_USER */}
+                      {/* Status — DEALER_USER only */}
                       {isDealer_User && (
                         <td
                           className="px-4 py-3"
@@ -2489,6 +2628,7 @@ const LeadManagement = () => {
                   ))}
                 </tbody>
               </table>
+
               {filtered.length === 0 && (
                 <EmptyState
                   icon={Search}
@@ -2497,6 +2637,7 @@ const LeadManagement = () => {
                 />
               )}
             </div>
+
             <Pagination
               total={filtered.length}
               page={page}
@@ -2508,6 +2649,7 @@ const LeadManagement = () => {
         )}
       </div>
 
+      {/* Panels */}
       {panelOpen && (
         <AddLeadPanel onClose={() => setPanelOpen(false)} onSave={handleSave} />
       )}
@@ -2523,6 +2665,18 @@ const LeadManagement = () => {
           onClose={() => setSelectedLead(null)}
           onUpdated={handleUpdated}
           onDeleted={handleDeleted}
+        />
+      )}
+
+      {/* ✅ Bulk Assign Bar — DEALER only, all state/handlers passed as props */}
+      {!isDealer_User && (
+        <BulkAssignBar
+          selectedIds={selectedIds}
+          leads={leads}
+          dealerUsers={dealerUsersForBulk}
+          onAssign={handleBulkAssign}
+          onClear={() => setSelectedIds(new Set())}
+          assigning={bulkAssigning}
         />
       )}
     </div>
