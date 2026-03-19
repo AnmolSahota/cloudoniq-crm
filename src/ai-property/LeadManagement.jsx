@@ -85,16 +85,6 @@ const getLatestFeedback = (callFeedback) => {
   return "To Be Called";
 };
 
-const formatFeedbackDatetime = (dt) => {
-  if (!dt) return null;
-  return new Date(dt).toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
 /* ─── PHONE CELL COMPONENT ──────────────────────────────────────────────────── */
 // DEALER       → masked number + call icon, click = unmask + dial
 // DEALER_USER  → assigned: masked + call icon | unassigned: masked only, no call icon
@@ -1938,7 +1928,14 @@ const LeadManagement = () => {
         assigned_to: authUser.id,
         assigned_name: authUser.name,
       });
-      handleUpdated(res.data.data);
+      // Update leads list without opening drawer
+      const updatedLead = res.data.data;
+      setLeads((prev) =>
+        prev.map((l) => (l.id === updatedLead.id ? updatedLead : l)),
+      );
+      setUnassignedCount((c) =>
+        updatedLead.assigned_to ? Math.max(0, c - 1) : c,
+      );
     } catch {
       // silently fail — user can try via detail panel
     } finally {
@@ -2219,19 +2216,19 @@ const LeadManagement = () => {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[calc(100vh-150px)]">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b">
+                <thead className="bg-gray-50 border-b sticky top-0 z-10 shadow-sm">
                   <tr>
                     {/* # — no sort */}
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap bg-gray-50">
                       #
                     </th>
 
                     {/* Assign Date — sortable */}
                     <th
                       onClick={() => handleSort("assigned_at")}
-                      className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition"
+                      className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition bg-gray-50"
                     >
                       Assign Date{" "}
                       <SortIcon colKey="assigned_at" sortConfig={sortConfig} />
@@ -2240,21 +2237,21 @@ const LeadManagement = () => {
                     {/* Customer Name — sortable */}
                     <th
                       onClick={() => handleSort("lead")}
-                      className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition"
+                      className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition bg-gray-50"
                     >
                       Customer Name{" "}
                       <SortIcon colKey="lead" sortConfig={sortConfig} />
                     </th>
 
                     {/* Number — static */}
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap bg-gray-50">
                       Number
                     </th>
 
                     {/* Call Feedback — sortable */}
                     <th
                       onClick={() => handleSort("call_feedback")}
-                      className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition"
+                      className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition bg-gray-50"
                     >
                       Call Feedback{" "}
                       <SortIcon
@@ -2266,7 +2263,7 @@ const LeadManagement = () => {
                     {/* BHK — sortable */}
                     <th
                       onClick={() => handleSort("bhk")}
-                      className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition"
+                      className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition bg-gray-50"
                     >
                       BHK <SortIcon colKey="bhk" sortConfig={sortConfig} />
                     </th>
@@ -2274,7 +2271,7 @@ const LeadManagement = () => {
                     {/* Budget — sortable */}
                     <th
                       onClick={() => handleSort("budget")}
-                      className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition"
+                      className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition bg-gray-50"
                     >
                       Budget{" "}
                       <SortIcon colKey="budget" sortConfig={sortConfig} />
@@ -2283,7 +2280,7 @@ const LeadManagement = () => {
                     {/* Possession — sortable */}
                     <th
                       onClick={() => handleSort("possession")}
-                      className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition"
+                      className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition bg-gray-50"
                     >
                       Possession{" "}
                       <SortIcon colKey="possession" sortConfig={sortConfig} />
@@ -2292,7 +2289,7 @@ const LeadManagement = () => {
                     {/* Location — sortable */}
                     <th
                       onClick={() => handleSort("location")}
-                      className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition"
+                      className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition bg-gray-50"
                     >
                       Location{" "}
                       <SortIcon colKey="location" sortConfig={sortConfig} />
@@ -2301,7 +2298,7 @@ const LeadManagement = () => {
                     {/* Stage — sortable */}
                     <th
                       onClick={() => handleSort("stage")}
-                      className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition"
+                      className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition bg-gray-50"
                     >
                       Stage <SortIcon colKey="stage" sortConfig={sortConfig} />
                     </th>
@@ -2310,7 +2307,7 @@ const LeadManagement = () => {
                     {!isDealer_User && (
                       <th
                         onClick={() => handleSort("assigned")}
-                        className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition"
+                        className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition bg-gray-50"
                       >
                         Assign To{" "}
                         <SortIcon colKey="assigned" sortConfig={sortConfig} />
@@ -2321,7 +2318,7 @@ const LeadManagement = () => {
                     {isDealer_User && (
                       <th
                         onClick={() => handleSort("status")}
-                        className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition"
+                        className="group text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-indigo-600 transition bg-gray-50"
                       >
                         Status{" "}
                         <SortIcon colKey="status" sortConfig={sortConfig} />
