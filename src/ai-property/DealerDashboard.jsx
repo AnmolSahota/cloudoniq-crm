@@ -107,26 +107,178 @@ const fmtDisplay = (d) =>
     : "";
 
 // ── Excel download ────────────────────────────────────────────────────────────
-const downloadFeedbackReport = (data) => {
-  const rows = data.map((row) => {
+const fmtExcelDate = (datetimeStr) => {
+  if (!datetimeStr) return "—";
+  const d = new Date(datetimeStr);
+  return d.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const fmtExcelTime = (datetimeStr) => {
+  if (!datetimeStr) return "—";
+  const d = new Date(datetimeStr);
+  return d
+    .toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    })
+    .toUpperCase();
+};
+
+const fmtBudget = (budget) => {
+  if (!budget) return "—";
+  return "₹" + (budget / 100000).toFixed(0) + "L";
+};
+
+const downloadFeedbackReport = (summaryData, allLeads, dateRange) => {
+  const wb = XLSX.utils.book_new();
+
+  // ── Sheet 1: Call Activity Detail ────────────────────────────────────────
+  const detailRows = [];
+  let rowNum = 1;
+
+  const activityEntries = [];
+
+  allLeads.forEach((lead) => {
+    if (!lead.assigned_to) return;
+    if (!Array.isArray(lead.call_feedback) || lead.call_feedback.length === 0)
+      return;
+
+    lead.call_feedback.forEach((entry) => {
+      if (!entry || typeof entry.stage !== "string" || !entry.stage.trim())
+        return;
+
+      // Apply date range filter if active
+      if (dateRange && entry.datetime) {
+        const dt = new Date(entry.datetime);
+        if (dt < dateRange.from || dt > dateRange.to) return;
+      }
+
+      activityEntries.push({
+        assignedTo: lead.assigned_name || "Unknown",
+        leadName: lead.contact_name || "—",
+        phone: lead.contact_phone || "—",
+        assignDate: lead.assigned_at || null,
+        property: lead.property_name || "—",
+        location: lead.location || "—",
+        bhk: lead.bhk || "—",
+        budget: fmtBudget(lead.budget),
+        leadStage: lead.stage || "—",
+        feedback: entry.stage.trim(),
+        datetime: entry.datetime || null,
+      });
+    });
+  });
+
+  // Sort: Assigned To → Lead Name → datetime ascending
+  activityEntries.sort((a, b) => {
+    if (a.assignedTo < b.assignedTo) return -1;
+    if (a.assignedTo > b.assignedTo) return 1;
+    if (a.leadName < b.leadName) return -1;
+    if (a.leadName > b.leadName) return 1;
+    if (!a.datetime) return -1;
+    if (!b.datetime) return 1;
+    return new Date(a.datetime) - new Date(b.datetime);
+  });
+
+  activityEntries.forEach((entry) => {
+    detailRows.push({
+      "#": rowNum++,
+      "Lead Name": entry.leadName,
+      Phone: entry.phone,
+      "Assigned To": entry.assignedTo,
+      "Assign Date": entry.assignDate ? fmtExcelDate(entry.assignDate) : "—",
+      Property: entry.property,
+      Location: entry.location,
+      BHK: entry.bhk,
+      Budget: entry.budget,
+      "Lead Stage": entry.leadStage,
+      "Call Feedback": entry.feedback,
+      Date: fmtExcelDate(entry.datetime),
+      Time: fmtExcelTime(entry.datetime),
+    });
+  });
+
+  const ws1 = XLSX.utils.json_to_sheet(
+    detailRows.length > 0
+      ? detailRows
+      : [{ "#": "No activity data for this period" }],
+  );
+
+  ws1["!cols"] = [
+    { wch: 5 }, // #
+    { wch: 25 }, // Lead Name
+    { wch: 14 }, // Phone
+    { wch: 18 }, // Assigned To
+    { wch: 14 }, // Assign Date
+    { wch: 22 }, // Property
+    { wch: 14 }, // Location
+    { wch: 10 }, // BHK
+    { wch: 10 }, // Budget
+    { wch: 14 }, // Lead Stage
+    { wch: 18 }, // Call Feedback
+    { wch: 14 }, // Date
+    { wch: 12 }, // Time
+  ];
+
+  ws1["!freeze"] = { xSplit: 0, ySplit: 1 };
+
+  XLSX.utils.book_append_sheet(wb, ws1, "Call Activity Detail");
+
+  // ── Sheet 2: Team Summary ─────────────────────────────────────────────────
+  const summaryRows = summaryData.map((row) => {
     const out = {
       "Team Member": row.user_name,
-      "Total Assigned": row.assigned,
+      "Total Leads": row.assigned,
     };
     FEEDBACK_COLS.forEach((col) => {
       out[col.label] = row[col.key] ?? 0;
     });
     return out;
   });
-  const ws = XLSX.utils.json_to_sheet(rows);
-  ws["!cols"] = [
-    { wch: 20 },
-    { wch: 16 },
-    ...FEEDBACK_COLS.map(() => ({ wch: 14 })),
+
+  // Totals footer row
+  const totalsRow = { "Team Member": "TOTAL", "Total Leads": 0 };
+  FEEDBACK_COLS.forEach((col) => {
+    totalsRow[col.label] = 0;
+  });
+  summaryData.forEach((row) => {
+    totalsRow["Total Leads"] += row.assigned;
+    FEEDBACK_COLS.forEach((col) => {
+      totalsRow[col.label] += row[col.key] ?? 0;
+    });
+  });
+  summaryRows.push(totalsRow);
+
+  const ws2 = XLSX.utils.json_to_sheet(
+    summaryRows.length > 0 ? summaryRows : [{ "Team Member": "No data" }],
+  );
+
+  ws2["!cols"] = [
+    { wch: 20 }, // Team Member
+    { wch: 14 }, // Total Leads
+    ...FEEDBACK_COLS.map(() => ({ wch: 16 })),
   ];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Call Feedback Report");
-  XLSX.writeFile(wb, "call_feedback_report.xlsx");
+
+  ws2["!freeze"] = { xSplit: 0, ySplit: 1 };
+
+  XLSX.utils.book_append_sheet(wb, ws2, "Team Summary");
+
+  // ── File name with date stamp ─────────────────────────────────────────────
+  const today = new Date();
+  const stamp = today
+    .toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    })
+    .replace(/ /g, "-");
+
+  XLSX.writeFile(wb, `call_activity_report_${stamp}.xlsx`);
 };
 
 /* ─── DATE FILTER BAR ────────────────────────────────────────────────────────── */
@@ -712,7 +864,13 @@ const DealerDashboard = () => {
               </p>
             </div>
             <button
-              onClick={() => downloadFeedbackReport(userFeedbackReport)}
+              onClick={() =>
+                downloadFeedbackReport(
+                  userFeedbackReport,
+                  leads,
+                  feedbackDateRange,
+                )
+              }
               disabled={userFeedbackReport.length === 0}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-semibold hover:bg-indigo-100 transition shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
             >
