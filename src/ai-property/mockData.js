@@ -122,7 +122,8 @@ export const LEAD_SOURCES = [
   "Website",
   "Manual",
   "Broadcast",
-  "Import",
+  "Cold Lead",
+  "Cold Lead",
 ];
 
 export const VISIT_STATUSES = [

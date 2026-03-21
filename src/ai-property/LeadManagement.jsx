@@ -1691,7 +1691,7 @@ const Pagination = ({ total, page, perPage, onPerPageChange, onChange }) => {
           onChange={(e) => onPerPageChange(Number(e.target.value))}
           className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-700 outline-none focus:border-indigo-400 transition"
         >
-          {[10, 25, 50, 100].map((n) => (
+          {[10, 25, 50, 100, 200, 300, 400, 500].map((n) => (
             <option key={n} value={n}>
               {n}
             </option>
