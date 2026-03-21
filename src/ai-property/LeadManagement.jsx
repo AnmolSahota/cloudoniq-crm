@@ -8,6 +8,7 @@ import {
   ArrowUp,
   ArrowUpDown,
   Building2,
+  Calendar,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -1165,6 +1166,14 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
   const [editLocation, setEditLocation] = useState(lead.location || "");
   const [editBhk, setEditBhk] = useState(lead.bhk || "");
   const [editPossession, setEditPossession] = useState(lead.possession || "");
+
+  // ── Visit Scheduler State ──────────────────────────────────────────────────
+  const [showVisitScheduler, setShowVisitScheduler] = useState(false);
+  const [visitDate, setVisitDate] = useState("");
+  const [visitTime, setVisitTime] = useState("");
+  const [visitNotes, setVisitNotes] = useState("");
+  const [visitCreated, setVisitCreated] = useState(null);
+
   const isAssignedToMe = isDealer_User && lead.assigned_to === authUser.id;
   const isUnassigned = !lead.assigned_to;
   const canEdit = !isDealer_User || isAssignedToMe;
@@ -1180,7 +1189,9 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
     editBudget !== (lead.budget ? String(lead.budget) : "") ||
     editBhk !== (lead.bhk || "") ||
     editPossession !== (lead.possession || "") ||
-    editLocation.trim() !== (lead.location || "");
+    editLocation.trim() !== (lead.location || "") ||
+    (showVisitScheduler && visitDate !== "") ||
+    (showVisitScheduler && visitTime !== "");
 
   const handleSelfAssign = async () => {
     setAssigning(true);
@@ -1208,12 +1219,28 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
       setError("Phone number cannot be empty.");
       return;
     }
+
+    // ── Validate visit fields when scheduling ────────────────────────────────
+    if (selectedCallFeedback === "Visit Scheduled" && showVisitScheduler) {
+      if (!visitDate) {
+        setError("Please select a visit date.");
+        return;
+      }
+      if (!visitTime) {
+        setError("Please select a visit time.");
+        return;
+      }
+    }
+
     setSaving(true);
     setError("");
+    setVisitCreated(null);
+
     try {
       const assignedUser = isDealer_User
         ? null
         : dealerUsers.find((u) => u.id === selectedUserId);
+
       const payload = {
         dealer_id: getDealerId(),
         name: editName.trim(),
@@ -1230,14 +1257,39 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
         bhk: editBhk || null,
         possession: editPossession || null,
       };
+
       if (newNote.trim())
         payload.new_note = {
           text: newNote.trim(),
           date: new Date().toISOString().split("T")[0],
         };
+
+      // ── Attach visit fields when call feedback = Visit Scheduled ────────────
+      if (
+        selectedCallFeedback === "Visit Scheduled" &&
+        showVisitScheduler &&
+        visitDate &&
+        visitTime
+      ) {
+        payload.visit_date = visitDate;
+        payload.visit_time = visitTime;
+        payload.visit_property_id = selectedPropertyId || null;
+        payload.visit_notes = visitNotes.trim() || "";
+      }
+
       const res = await axios.patch(`${BASE_URL}/leads/${lead.id}`, payload);
+
+      // ── Handle visit created in response ──────────────────────────────────
+      if (res.data.visit) {
+        setVisitCreated(res.data.visit);
+      }
+
       onUpdated(res.data.data);
       setNewNote("");
+      setShowVisitScheduler(false);
+      setVisitDate("");
+      setVisitTime("");
+      setVisitNotes("");
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
@@ -1266,6 +1318,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col overflow-hidden">
+        {/* ── Header ── */}
         <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-5 flex items-start justify-between text-white">
           <div>
             <div className="font-black text-lg">
@@ -1293,6 +1346,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
           </div>
         </div>
 
+        {/* ── Unassigned banner — DEALER_USER only ── */}
         {isDealer_User && isUnassigned && (
           <div className="bg-indigo-50 border-b border-indigo-200 px-5 py-3 flex items-center justify-between gap-3">
             <div>
@@ -1318,6 +1372,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
           </div>
         )}
 
+        {/* ── Read-only banner — DEALER_USER assigned to someone else ── */}
         {isDealer_User && !isUnassigned && !isAssignedToMe && (
           <div className="bg-amber-50 border-b border-amber-200 px-5 py-3">
             <p className="text-sm font-semibold text-amber-800">
@@ -1329,6 +1384,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
           </div>
         )}
 
+        {/* ── Delete confirmation banner ── */}
         {confirmDelete && (
           <div className="bg-red-50 border-b border-red-200 px-5 py-3 flex items-center justify-between gap-3">
             <span className="text-sm text-red-700 font-medium">
@@ -1355,6 +1411,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
           </div>
         )}
 
+        {/* ── Scrollable body ── */}
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-700 text-sm font-medium">
@@ -1362,6 +1419,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
             </div>
           )}
 
+          {/* ── Contact Info ── */}
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Contact Info
@@ -1406,6 +1464,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
             </div>
           </div>
 
+          {/* ── Call Feedback ── */}
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Call Feedback
@@ -1421,16 +1480,156 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                     onClick={() => {
                       setSelectedCallFeedback(option);
                       setSaved(false);
+                      // ── Show scheduler when Visit Scheduled feedback picked ──
+                      if (
+                        option === "Visit Scheduled" &&
+                        getLatestFeedback(lead.call_feedback) !==
+                          "Visit Scheduled"
+                      ) {
+                        setShowVisitScheduler(true);
+                      } else {
+                        setShowVisitScheduler(false);
+                        setVisitDate("");
+                        setVisitTime("");
+                        setVisitNotes("");
+                      }
                     }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${isSelected ? `${colors.bg} ${colors.text} border-transparent` : "border-gray-200 text-gray-600 hover:bg-gray-50"} disabled:opacity-50 disabled:cursor-not-allowed`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+                      isSelected
+                        ? `${colors.bg} ${colors.text} border-transparent`
+                        : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     {option}
                   </button>
                 );
               })}
             </div>
+
+            {/* ── Visit Scheduler ── */}
+            {showVisitScheduler && canEdit && (
+              <div className="mt-3 space-y-3">
+                {/* Subtle section divider — no cancel button */}
+                <div className="flex items-center gap-2">
+                  <Calendar size={12} className="text-indigo-500" />
+                  <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wide">
+                    Site Visit Details
+                  </span>
+                  <div className="flex-1 h-px bg-indigo-100" />
+                </div>
+
+                {/* Date + Time */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                      Visit Date <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={visitDate}
+                      min={new Date().toISOString().split("T")[0]}
+                      onChange={(e) => {
+                        setVisitDate(e.target.value);
+                        setSaved(false);
+                      }}
+                      className={inputCls}
+                    />
+                    {visitDate && (
+                      <p className="text-[10px] text-indigo-500 font-semibold mt-1">
+                        {new Date(visitDate + "T00:00:00").toLocaleDateString(
+                          "en-IN",
+                          {
+                            weekday: "short",
+                            day: "numeric",
+                            month: "short",
+                          },
+                        )}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                      Visit Time <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="time"
+                      value={visitTime}
+                      onChange={(e) => {
+                        setVisitTime(e.target.value);
+                        setSaved(false);
+                      }}
+                      className={inputCls}
+                    />
+                    {visitTime && (
+                      <p className="text-[10px] text-indigo-500 font-semibold mt-1">
+                        {(() => {
+                          const [h, m] = visitTime.split(":");
+                          const hour = parseInt(h);
+                          return (
+                            (hour % 12 || 12) +
+                            ":" +
+                            m +
+                            (hour < 12 ? " AM" : " PM")
+                          );
+                        })()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Visit Notes */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                    Visit Notes{" "}
+                    <span className="text-gray-400 font-normal">
+                      (optional)
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    value={visitNotes}
+                    onChange={(e) => setVisitNotes(e.target.value)}
+                    placeholder="e.g. Call before arriving, bring brochure..."
+                    className={inputCls}
+                  />
+                </div>
+
+                {/* Status hint */}
+                {!visitDate || !visitTime ? (
+                  <p className="text-[11px] text-amber-500 font-medium flex items-center gap-1">
+                    <AlertTriangle size={11} />
+                    Select date and time to schedule the visit
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-indigo-500 font-semibold flex items-center gap-1">
+                    <CheckCircle2 size={11} />
+                    Visit will be created when you save
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* ── Visit created success banner ── */}
+            {visitCreated && (
+              <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex items-start gap-2">
+                <CheckCircle2
+                  size={15}
+                  className="text-emerald-500 shrink-0 mt-0.5"
+                />
+                <div>
+                  <p className="text-xs font-bold text-emerald-700">
+                    Site visit scheduled successfully!
+                  </p>
+                  <p className="text-xs text-emerald-600 mt-0.5">
+                    {visitCreated.date} at {visitCreated.time}
+                    {visitCreated.property ? ` · ${visitCreated.property}` : ""}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
+          {/* ── Lead Stage ── */}
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Lead Stage
@@ -1444,7 +1643,11 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
                     setSelectedStage(s);
                     setSaved(false);
                   }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${selectedStage === s ? `${STAGE_COLORS[s].bg} ${STAGE_COLORS[s].text} border-transparent` : "border-gray-200 text-gray-600 hover:bg-gray-50"} disabled:opacity-50 disabled:cursor-not-allowed`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+                    selectedStage === s
+                      ? `${STAGE_COLORS[s].bg} ${STAGE_COLORS[s].text} border-transparent`
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   {s}
                 </button>
@@ -1452,6 +1655,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
             </div>
           </div>
 
+          {/* ── Property ── */}
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Property
@@ -1480,6 +1684,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
             </div>
           </div>
 
+          {/* ── Assigned To — DEALER only ── */}
           {!isDealer_User && (
             <div>
               <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
@@ -1509,6 +1714,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
             </div>
           )}
 
+          {/* ── Details ── */}
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Details
@@ -1588,6 +1794,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
             </div>
           </div>
 
+          {/* ── Tasks ── */}
           {canEdit && (
             <div>
               <div className="flex items-center justify-between mb-3">
@@ -1605,6 +1812,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
             </div>
           )}
 
+          {/* ── Notes ── */}
           <div>
             <div className="flex items-center gap-2 mb-3">
               <StickyNote size={14} className="text-amber-500" />
@@ -1640,6 +1848,7 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
           </div>
         </div>
 
+        {/* ── Footer ── */}
         <div className="px-6 py-4 border-t flex gap-3">
           <button
             onClick={onClose}
@@ -1651,7 +1860,13 @@ const LeadDetailPanel = ({ lead, onClose, onUpdated, onDeleted }) => {
             <button
               onClick={handleUpdate}
               disabled={(!isDirty && !saved) || saving}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2 shadow-sm ${saved ? "bg-green-500 text-white cursor-default" : isDirty ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:opacity-90" : "bg-gray-100 text-gray-400 cursor-not-allowed"} disabled:opacity-60`}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2 shadow-sm ${
+                saved
+                  ? "bg-green-500 text-white cursor-default"
+                  : isDirty
+                    ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:opacity-90"
+                    : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              } disabled:opacity-60`}
             >
               {saving ? (
                 <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
