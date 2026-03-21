@@ -648,8 +648,21 @@ function EditPropertyModal({
                           alt={`Property ${idx + 1}`}
                           className="w-full h-32 object-cover rounded-xl border-2 border-gray-200"
                           onError={(e) => {
-                            e.target.src =
-                              "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400";
+                            console.error(
+                              `Image failed to load: ${BASE_URL}/${img}`,
+                            );
+                            e.target.style.display = "none";
+                            e.target.parentElement
+                              .querySelector(".img-error")
+                              ?.remove();
+                            const errDiv = document.createElement("div");
+                            errDiv.className =
+                              "img-error w-full h-32 rounded-xl border-2 border-red-300 bg-red-50 flex items-center justify-center text-red-400 text-xs font-medium";
+                            errDiv.textContent = `Failed: ${img}`;
+                            e.target.parentElement.insertBefore(
+                              errDiv,
+                              e.target,
+                            );
                           }}
                         />
                         <button
