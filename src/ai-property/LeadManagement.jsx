@@ -1972,7 +1972,7 @@ const SortIcon = ({ colKey, sortConfig }) => {
 };
 
 /* ─── BULK ASSIGN BAR ────────────────────────────────────────────────────────── */
-// All props passed in from LeadManagement — no internal state access needed
+/* ─── BULK ASSIGN BAR ────────────────────────────────────────────────────────── */
 const BulkAssignBar = ({
   selectedIds,
   leads,
@@ -1998,18 +1998,29 @@ const BulkAssignBar = ({
 
   const selectedLeads = leads.filter((l) => selectedIds.has(l.id));
   const unassignedCount = selectedLeads.filter((l) => !l.assigned_to).length;
-  const alreadyAssignedCount = selectedLeads.filter(
-    (l) => l.assigned_to,
-  ).length;
+  const assignedCount = selectedLeads.filter((l) => l.assigned_to).length;
 
   const handleUserPick = (user) => {
     setDropdownOpen(false);
-    setConfirmModal({ user, unassignedCount, alreadyAssignedCount });
+    setConfirmModal({
+      type: "assign",
+      user,
+      unassignedCount,
+      alreadyAssignedCount: assignedCount,
+    });
+  };
+
+  const handleUnassignClick = () => {
+    setDropdownOpen(false);
+    setConfirmModal({
+      type: "unassign",
+      assignedCount,
+    });
   };
 
   return (
     <>
-      {/* Sticky bottom action bar */}
+      {/* ── Sticky bottom action bar ── */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-gray-700 whitespace-nowrap">
         {/* Selected count badge */}
         <div className="flex items-center gap-2">
@@ -2019,16 +2030,14 @@ const BulkAssignBar = ({
           <span className="text-sm font-semibold">leads selected</span>
         </div>
 
-        {/* Split info — only shown when mixed */}
-        {alreadyAssignedCount > 0 && unassignedCount > 0 && (
+        {/* Split info */}
+        {assignedCount > 0 && unassignedCount > 0 && (
           <div className="flex items-center gap-1.5 text-xs border-l border-gray-700 pl-3">
             <span className="text-amber-400 font-semibold">
               {unassignedCount} unassigned
             </span>
             <span className="text-gray-500">·</span>
-            <span className="text-gray-400">
-              {alreadyAssignedCount} assigned
-            </span>
+            <span className="text-gray-400">{assignedCount} assigned</span>
           </div>
         )}
 
@@ -2059,6 +2068,28 @@ const BulkAssignBar = ({
                   Select team member
                 </p>
               </div>
+
+              {/* ── Unassign option — only shown when some leads are assigned ── */}
+              {assignedCount > 0 && (
+                <button
+                  onClick={handleUnassignClick}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-red-50 transition text-left border-b border-gray-100"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
+                    <UserCircle size={14} className="text-red-500" />
+                  </div>
+                  <div>
+                    <span className="text-sm font-semibold text-red-600">
+                      Unassign
+                    </span>
+                    <p className="text-[10px] text-gray-400">
+                      Remove assignment from {assignedCount} lead
+                      {assignedCount > 1 ? "s" : ""}
+                    </p>
+                  </div>
+                </button>
+              )}
+
               {dealerUsers.length === 0 ? (
                 <div className="px-3 py-3 text-xs text-gray-400 text-center">
                   No active team members
@@ -2095,7 +2126,7 @@ const BulkAssignBar = ({
         </button>
       </div>
 
-      {/* Confirmation modal */}
+      {/* ── Confirmation modal ── */}
       {confirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
@@ -2103,68 +2134,123 @@ const BulkAssignBar = ({
             onClick={() => setConfirmModal(null)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4">
-            <h3 className="font-black text-gray-900 text-base mb-1">
-              Assign to {confirmModal.user.name}?
-            </h3>
-            <p className="text-sm text-gray-500 mb-4">
-              {selectedIds.size} lead{selectedIds.size > 1 ? "s" : ""} selected
-            </p>
-
-            {/* Summary */}
-            <div className="bg-gray-50 rounded-xl p-3 space-y-1.5 mb-5">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Unassigned leads</span>
-                <span className="font-bold text-gray-900">
-                  {confirmModal.unassignedCount}
-                </span>
-              </div>
-              {confirmModal.alreadyAssignedCount > 0 && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-amber-600 font-medium">
-                    Already assigned (will be reassigned)
-                  </span>
-                  <span className="font-bold text-amber-600">
-                    {confirmModal.alreadyAssignedCount}
-                  </span>
+            {/* ── Assign modal ── */}
+            {confirmModal.type === "assign" && (
+              <>
+                <h3 className="font-black text-gray-900 text-base mb-1">
+                  Assign to {confirmModal.user.name}?
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  {selectedIds.size} lead{selectedIds.size > 1 ? "s" : ""}{" "}
+                  selected
+                </p>
+                <div className="bg-gray-50 rounded-xl p-3 space-y-1.5 mb-5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Unassigned leads</span>
+                    <span className="font-bold text-gray-900">
+                      {confirmModal.unassignedCount}
+                    </span>
+                  </div>
+                  {confirmModal.alreadyAssignedCount > 0 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-amber-600 font-medium">
+                        Already assigned (will be reassigned)
+                      </span>
+                      <span className="font-bold text-amber-600">
+                        {confirmModal.alreadyAssignedCount}
+                      </span>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-2">
-              {/* Only show "unassigned only" option when there's a mix */}
-              {confirmModal.alreadyAssignedCount > 0 &&
-                confirmModal.unassignedCount > 0 && (
+                <div className="flex flex-col gap-2">
+                  {confirmModal.alreadyAssignedCount > 0 &&
+                    confirmModal.unassignedCount > 0 && (
+                      <button
+                        onClick={() => {
+                          onAssign(confirmModal.user, false);
+                          setConfirmModal(null);
+                        }}
+                        className="w-full py-2.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-semibold hover:bg-indigo-100 transition"
+                      >
+                        Assign Unassigned Only ({confirmModal.unassignedCount})
+                      </button>
+                    )}
                   <button
                     onClick={() => {
-                      onAssign(confirmModal.user, false);
+                      onAssign(confirmModal.user, true);
                       setConfirmModal(null);
                     }}
-                    className="w-full py-2.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-semibold hover:bg-indigo-100 transition"
+                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-semibold hover:opacity-90 transition"
                   >
-                    Assign Unassigned Only ({confirmModal.unassignedCount})
+                    {confirmModal.alreadyAssignedCount > 0
+                      ? "Assign All " + selectedIds.size
+                      : "Assign " +
+                        selectedIds.size +
+                        " Lead" +
+                        (selectedIds.size > 1 ? "s" : "")}
                   </button>
-                )}
-              <button
-                onClick={() => {
-                  onAssign(confirmModal.user, true);
-                  setConfirmModal(null);
-                }}
-                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-semibold hover:opacity-90 transition"
-              >
-                {confirmModal.alreadyAssignedCount > 0
-                  ? "Assign All " + selectedIds.size
-                  : "Assign " +
-                    selectedIds.size +
-                    " Lead" +
-                    (selectedIds.size > 1 ? "s" : "")}
-              </button>
-              <button
-                onClick={() => setConfirmModal(null)}
-                className="w-full py-2.5 rounded-xl border text-sm font-semibold text-gray-600 hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-            </div>
+                  <button
+                    onClick={() => setConfirmModal(null)}
+                    className="w-full py-2.5 rounded-xl border text-sm font-semibold text-gray-600 hover:bg-gray-50 transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* ── Unassign modal ── */}
+            {confirmModal.type === "unassign" && (
+              <>
+                <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center mb-4">
+                  <UserCircle size={22} className="text-red-500" />
+                </div>
+                <h3 className="font-black text-gray-900 text-base mb-1">
+                  Unassign {confirmModal.assignedCount} lead
+                  {confirmModal.assignedCount > 1 ? "s" : ""}?
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  These leads will become unassigned and appear in the
+                  unassigned pool.
+                </p>
+                <div className="bg-gray-50 rounded-xl p-3 mb-5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Leads to unassign</span>
+                    <span className="font-bold text-red-600">
+                      {confirmModal.assignedCount}
+                    </span>
+                  </div>
+                  {unassignedCount > 0 && (
+                    <div className="flex items-center justify-between text-sm mt-1.5">
+                      <span className="text-gray-400">
+                        Already unassigned (skipped)
+                      </span>
+                      <span className="font-semibold text-gray-400">
+                        {unassignedCount}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={() => {
+                      onAssign(null, true); // null user = unassign
+                      setConfirmModal(null);
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition"
+                  >
+                    Yes, Unassign {confirmModal.assignedCount} Lead
+                    {confirmModal.assignedCount > 1 ? "s" : ""}
+                  </button>
+                  <button
+                    onClick={() => setConfirmModal(null)}
+                    className="w-full py-2.5 rounded-xl border text-sm font-semibold text-gray-600 hover:bg-gray-50 transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -2251,28 +2337,32 @@ const LeadManagement = () => {
   const handleBulkAssign = async (user, overwriteAssigned) => {
     setBulkAssigning(true);
     try {
-      // Filter on frontend first — avoids sending IDs the backend would skip anyway
-      const idsToAssign = [...selectedIds].filter((id) => {
+      const isUnassign = user === null;
+
+      const idsToProcess = [...selectedIds].filter((id) => {
+        if (isUnassign) {
+          // Only process leads that are currently assigned
+          const lead = leads.find((l) => l.id === id);
+          return lead && lead.assigned_to;
+        }
         if (overwriteAssigned) return true;
         const lead = leads.find((l) => l.id === id);
         return lead && !lead.assigned_to;
       });
 
-      if (idsToAssign.length === 0) {
+      if (idsToProcess.length === 0) {
         setSelectedIds(new Set());
         return;
       }
 
-      // ✅ Single bulk API call — replaces N parallel PATCH requests
       const { data } = await axios.patch(`${BASE_URL}/leads/bulk-assign`, {
         dealer_id: getDealerId(),
-        lead_ids: idsToAssign,
-        assigned_to: user.id,
-        assigned_name: user.name,
-        overwrite_assigned: overwriteAssigned,
+        lead_ids: idsToProcess,
+        assigned_to: isUnassign ? null : user.id,
+        assigned_name: isUnassign ? null : user.name,
+        overwrite_assigned: true,
       });
 
-      // Patch local state from the returned updated leads array
       const updatedLeads = data.data || [];
       setLeads((prev) =>
         prev.map((l) => {
@@ -2281,11 +2371,16 @@ const LeadManagement = () => {
         }),
       );
 
-      // Use backend's modified_count — more accurate than frontend guess
-      setUnassignedCount((c) => Math.max(0, c - (data.modified_count || 0)));
+      // If unassigning, increase unassigned count
+      if (isUnassign) {
+        setUnassignedCount((c) => c + (data.modified_count || 0));
+      } else {
+        setUnassignedCount((c) => Math.max(0, c - (data.modified_count || 0)));
+      }
+
       setSelectedIds(new Set());
     } catch (err) {
-      console.error("Bulk assign error:", err);
+      console.error("Bulk assign/unassign error:", err);
     } finally {
       setBulkAssigning(false);
     }
