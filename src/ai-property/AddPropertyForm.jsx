@@ -381,32 +381,42 @@ export default function AddPropertyForm() {
     const files = Array.from(e.target.files || []);
     const valid = [],
       invalid = [];
+
     files.forEach((f) => {
       if (!f.type.startsWith("image/"))
         invalid.push(`${f.name} (not an image)`);
       else if (f.size > 10 * 1024 * 1024) invalid.push(`${f.name} (max 10MB)`);
       else valid.push(f);
     });
+
     if (invalid.length) toast.error(`Skipped: ${invalid.join(", ")}`);
-    const newImgs = valid.map((f) => ({
-      name: f.name,
-      preview: URL.createObjectURL(f),
-      file: f,
-    }));
-    setImages((prev) => {
-      const next = [...prev, ...newImgs];
-      setErrors((e) => ({
-        ...e,
-        images:
-          next.length === 0 ? "At least one image is required" : undefined,
-      }));
-      return next;
+
+    // Convert each file to base64 instead of blob URL
+    const readerPromises = valid.map(
+      (f) =>
+        new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) =>
+            resolve({ name: f.name, preview: e.target.result, file: f });
+          reader.readAsDataURL(f); // ← base64 data URL, works on all origins
+        }),
+    );
+
+    Promise.all(readerPromises).then((newImgs) => {
+      setImages((prev) => {
+        const next = [...prev, ...newImgs];
+        setErrors((e) => ({
+          ...e,
+          images:
+            next.length === 0 ? "At least one image is required" : undefined,
+        }));
+        return next;
+      });
+      if (valid.length) toast.success(`Added ${valid.length} image(s)`);
     });
-    if (valid.length) toast.success(`Added ${valid.length} image(s)`);
   };
 
   const removeImage = (index) => {
-    URL.revokeObjectURL(images[index].preview);
     setImages((prev) => {
       const next = prev.filter((_, i) => i !== index);
       setErrors((e) => ({
@@ -417,11 +427,6 @@ export default function AddPropertyForm() {
       return next;
     });
   };
-
-  useEffect(
-    () => () => images.forEach((img) => URL.revokeObjectURL(img.preview)),
-    [],
-  );
 
   const formatPrice = (value) => {
     if (!value) return "";
