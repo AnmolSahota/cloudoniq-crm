@@ -13,6 +13,7 @@ import {
   Menu,
   Plus,
   Star,
+  Target,
   UserCog,
   Users,
 } from "lucide-react";
@@ -41,6 +42,7 @@ import FeatureAccess from "./FeatureAccess";
 import LeadsVisits from "./LeadsVisits";
 import ManageDealers from "./ManageDealers";
 import TopDealers from "./TopDealers";
+import SalesTargets from "./SalesTargets";
 
 /* ── Nav Config ─────────────────────────────────────────────────────────────── */
 const NAV_CONFIG = {
@@ -184,6 +186,14 @@ const NAV_CONFIG = {
       description: "Manage your team users",
       component: <ManageSalesTeam />,
     },
+    // {
+    //   id: "sales-targets",
+    //   label: "Sales Targets",
+    //   icon: Target,
+    //   color: "from-orange-500 to-amber-500",
+    //   description: "Daily targets & team progress",
+    //   component: <SalesTargets />,
+    // },
   ],
 
   // ── Dealer User (sales team member) ────────────────────────────────────────
