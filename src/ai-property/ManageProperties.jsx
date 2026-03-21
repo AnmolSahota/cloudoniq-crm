@@ -695,8 +695,21 @@ function EditPropertyModal({
                           alt={`Deleted ${idx + 1}`}
                           className="w-full h-32 object-cover rounded-xl border-2 border-red-300 opacity-50"
                           onError={(e) => {
-                            e.target.src =
-                              "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400";
+                            console.error(
+                              `Image failed to load: ${BASE_URL}/${img}`,
+                            );
+                            e.target.style.display = "none";
+                            e.target.parentElement
+                              .querySelector(".img-error")
+                              ?.remove();
+                            const errDiv = document.createElement("div");
+                            errDiv.className =
+                              "img-error w-full h-32 rounded-xl border-2 border-red-300 bg-red-50 flex items-center justify-center text-red-400 text-xs font-medium";
+                            errDiv.textContent = `Failed: ${img}`;
+                            e.target.parentElement.insertBefore(
+                              errDiv,
+                              e.target,
+                            );
                           }}
                         />
                         <button
@@ -864,8 +877,14 @@ function PropertyCard({ property, viewMode, formatPrice, onEdit, onDelete }) {
           alt={property.project_name}
           className="w-full h-full object-cover"
           onError={(e) => {
-            e.target.src =
-              "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=80";
+            console.error(`Image failed to load: ${BASE_URL}/${img}`);
+            e.target.style.display = "none";
+            e.target.parentElement.querySelector(".img-error")?.remove();
+            const errDiv = document.createElement("div");
+            errDiv.className =
+              "img-error w-full h-32 rounded-xl border-2 border-red-300 bg-red-50 flex items-center justify-center text-red-400 text-xs font-medium";
+            errDiv.textContent = `Failed: ${img}`;
+            e.target.parentElement.insertBefore(errDiv, e.target);
           }}
         />
       </div>
