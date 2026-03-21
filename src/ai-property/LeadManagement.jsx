@@ -2194,6 +2194,8 @@ const LeadManagement = () => {
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [sortConfig, setSortConfig] = useState({ key: null, dir: "asc" });
+  const [filterUser, setFilterUser] = useState("All");
+  const [filterCallFeedback, setFilterCallFeedback] = useState("All");
 
   // ── Bulk assignment state (DEALER only) ──────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -2332,6 +2334,13 @@ const LeadManagement = () => {
       if (filterStage !== "All" && l.stage !== filterStage) return false;
       if (filterAssigned === "unassigned" && l.assigned_to) return false;
       if (filterAssigned === "assigned" && !l.assigned_to) return false;
+      // ── User filter — DEALER only ──────────────────────────────────────────
+      if (filterUser !== "All" && l.assigned_to !== filterUser) return false;
+      // ── Call feedback filter — both roles ──────────────────────────────────
+      if (filterCallFeedback !== "All") {
+        const latest = getLatestFeedback(l.call_feedback);
+        if (latest !== filterCallFeedback) return false;
+      }
       return true;
     });
 
@@ -2386,14 +2395,26 @@ const LeadManagement = () => {
       if (aVal > bVal) return sortConfig.dir === "asc" ? 1 : -1;
       return 0;
     });
-  }, [leads, search, filterStage, filterAssigned, sortConfig]);
+  }, [
+    leads,
+    search,
+    filterStage,
+    filterAssigned,
+    filterUser,
+    filterCallFeedback,
+    sortConfig,
+  ]);
 
   const paginated = useMemo(
     () => filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage),
     [filtered, page, rowsPerPage],
   );
   const hasFilters =
-    search || filterStage !== "All" || filterAssigned !== "All";
+    search ||
+    filterStage !== "All" ||
+    filterAssigned !== "All" ||
+    filterUser !== "All" ||
+    filterCallFeedback !== "All";
 
   // ── Header checkbox helpers ──────────────────────────────────────────────────
   const allOnPageSelected =
@@ -2433,13 +2454,11 @@ const LeadManagement = () => {
           </div>
         }
       />
-
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm font-medium">
           {error}
         </div>
       )}
-
       {unassignedCount > 0 && (
         <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
           <AlertTriangle size={18} className="text-amber-500 shrink-0" />
@@ -2466,9 +2485,9 @@ const LeadManagement = () => {
           </button>
         </div>
       )}
-
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">
+        {/* Search */}
         <div className="flex items-center gap-2 bg-white border rounded-xl px-3 py-2 flex-1 min-w-52 shadow-sm">
           <Search size={15} className="text-gray-400 shrink-0" />
           <input
@@ -2481,6 +2500,8 @@ const LeadManagement = () => {
             }}
           />
         </div>
+
+        {/* Stage filter */}
         <select
           value={filterStage}
           onChange={(e) => {
@@ -2494,6 +2515,25 @@ const LeadManagement = () => {
             <option key={s}>{s}</option>
           ))}
         </select>
+
+        {/* Call Feedback filter — both roles */}
+        <select
+          value={filterCallFeedback}
+          onChange={(e) => {
+            setFilterCallFeedback(e.target.value);
+            resetPage();
+          }}
+          className="px-3 py-2 rounded-xl border bg-white text-sm text-gray-700 shadow-sm outline-none"
+        >
+          <option value="All">All Feedback</option>
+          {CALL_FEEDBACK_OPTIONS.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+
+        {/* Assigned filter — DEALER only */}
         {!isDealer_User && (
           <select
             value={filterAssigned}
@@ -2508,12 +2548,35 @@ const LeadManagement = () => {
             <option value="assigned">Assigned</option>
           </select>
         )}
+
+        {/* User filter — DEALER only */}
+        {!isDealer_User && (
+          <select
+            value={filterUser}
+            onChange={(e) => {
+              setFilterUser(e.target.value);
+              resetPage();
+            }}
+            className="px-3 py-2 rounded-xl border bg-white text-sm text-gray-700 shadow-sm outline-none"
+          >
+            <option value="All">All Users</option>
+            {dealerUsersForBulk.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {/* Clear filters */}
         {hasFilters && (
           <button
             onClick={() => {
               setSearch("");
               setFilterStage("All");
               setFilterAssigned("All");
+              setFilterUser("All");
+              setFilterCallFeedback("All");
               resetPage();
             }}
             className="flex items-center gap-1 px-3 py-2 rounded-xl text-sm text-gray-500 hover:bg-gray-100 border transition"
@@ -2522,7 +2585,6 @@ const LeadManagement = () => {
           </button>
         )}
       </div>
-
       {/* Table */}
       <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
         {loading ? (
@@ -2863,7 +2925,6 @@ const LeadManagement = () => {
           </>
         )}
       </div>
-
       {/* Panels */}
       {panelOpen && (
         <AddLeadPanel onClose={() => setPanelOpen(false)} onSave={handleSave} />
@@ -2882,7 +2943,6 @@ const LeadManagement = () => {
           onDeleted={handleDeleted}
         />
       )}
-
       {/* ✅ Bulk Assign Bar — DEALER only, all state/handlers passed as props */}
       {!isDealer_User && (
         <BulkAssignBar
