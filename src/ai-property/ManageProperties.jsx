@@ -877,13 +877,15 @@ function PropertyCard({ property, viewMode, formatPrice, onEdit, onDelete }) {
           alt={property.project_name}
           className="w-full h-full object-cover"
           onError={(e) => {
-            console.error(`Image failed to load: ${BASE_URL}/${img}`);
+            console.error(
+              `Image failed to load: ${getImageUrl(property.images?.[0])}`,
+            );
             e.target.style.display = "none";
             e.target.parentElement.querySelector(".img-error")?.remove();
             const errDiv = document.createElement("div");
             errDiv.className =
-              "img-error w-full h-32 rounded-xl border-2 border-red-300 bg-red-50 flex items-center justify-center text-red-400 text-xs font-medium";
-            errDiv.textContent = `Failed: ${img}`;
+              "img-error w-full h-full flex items-center justify-center bg-red-50 border-2 border-red-300 rounded text-red-400 text-xs font-medium p-2 text-center";
+            errDiv.textContent = `Failed: ${property.images?.[0]}`;
             e.target.parentElement.insertBefore(errDiv, e.target);
           }}
         />
