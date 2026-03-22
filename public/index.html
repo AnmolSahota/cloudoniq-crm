@@ -11,7 +11,11 @@
     <!-- ── Viewport & Theme ── -->
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#4f46e5" />
-
+    <!-- ── Content Security Policy ── ADD THIS ── -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.amazonaws.com; connect-src 'self' ws: wss: http: https:; font-src 'self' data:;"
+    />
     <!-- ── Primary SEO ── -->
     <title>PropPilot CRM — Real Estate Sales & Lead Management Platform</title>
     <meta
