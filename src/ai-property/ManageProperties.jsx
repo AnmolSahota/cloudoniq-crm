@@ -21,6 +21,23 @@ import { BASE_URL } from "./config";
 import { PageHeader } from "./SharedComponents";
 import { bhkOptions } from "./mockData";
 
+// ── S3 image URL helper ────────────────────────────────────────────────────────
+// Handles 3 cases:
+//   1. Already full URL  (http...)       → use as-is
+//   2. S3 key            (dealers/...)   → prepend S3_PUBLIC_URL
+//   3. Old disk path     (uploads/...)   → prepend BASE_URL (backward compat)
+const S3_PUBLIC_URL =
+  process.env.REACT_APP_S3_PUBLIC_URL ||
+  "https://crm-proppilot.s3.us-east-1.amazonaws.com";
+
+const getImageUrl = (keyOrUrl) => {
+  if (!keyOrUrl) return null;
+  if (keyOrUrl.startsWith("http")) return keyOrUrl;
+  if (keyOrUrl.startsWith("dealers/")) return `${S3_PUBLIC_URL}/${keyOrUrl}`;
+  return `${BASE_URL}/${keyOrUrl}`; // old disk path fallback
+};
+
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function ManageProperties() {
   const [properties, setProperties] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -73,22 +90,20 @@ export default function ManageProperties() {
   const fetchProperties = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`${BASE_URL}/properties/list`, {
+      const res = await axios.get(`${BASE_URL}/properties/list`, {
         params: { dealer_id: dealerId },
       });
-      if (response.data.success) {
-        setProperties(response.data.properties);
-      }
-    } catch (error) {
-      console.error("❌ Error fetching properties:", error);
+      if (res.data.success) setProperties(res.data.properties);
+    } catch (err) {
+      console.error("❌ Error fetching properties:", err);
       toast.error("Failed to load properties");
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredProperties = properties.filter((property) =>
-    property.project_name.toLowerCase().includes(searchTerm.toLowerCase()),
+  const filteredProperties = properties.filter((p) =>
+    p.project_name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const formatPrice = (price) => {
@@ -97,28 +112,23 @@ export default function ManageProperties() {
     return `₹${price.toLocaleString("en-IN")}`;
   };
 
-  const handleDelete = (id) => setDeleteModal(id);
-
   const confirmDelete = async () => {
-    const propertyToDelete = properties.find((p) => p._id === deleteModal);
-    if (!propertyToDelete) {
+    const prop = properties.find((p) => p._id === deleteModal);
+    if (!prop) {
       setDeleteModal(null);
       return;
     }
-
     setDeleting(true);
     try {
-      const response = await axios.delete(
+      const res = await axios.delete(
         `${BASE_URL}/properties/delete/${dealerId}/${deleteModal}`,
       );
-      if (response.data.success) {
-        setProperties(properties.filter((p) => p._id !== deleteModal));
-        toast.success(
-          `"${propertyToDelete.project_name}" deleted successfully`,
-        );
+      if (res.data.success) {
+        setProperties((prev) => prev.filter((p) => p._id !== deleteModal));
+        toast.success(`"${prop.project_name}" deleted successfully`);
       }
-    } catch (error) {
-      if (error.response?.status === 404) {
+    } catch (err) {
+      if (err.response?.status === 404) {
         toast.error("Property not found or already deleted");
         fetchProperties();
       } else {
@@ -130,15 +140,9 @@ export default function ManageProperties() {
     }
   };
 
-  const handleEdit = (id) => {
-    const property = properties.find((p) => p._id === id);
-    setEditModal(property);
-  };
-
-  // ── Called by EditPropertyModal after successful update ───────────────────
-  const handleUpdateSuccess = (updatedProperty) => {
+  const handleUpdateSuccess = (updated) => {
     setProperties((prev) =>
-      prev.map((p) => (p._id === updatedProperty._id ? updatedProperty : p)),
+      prev.map((p) => (p._id === updated._id ? updated : p)),
     );
     setEditModal(null);
   };
@@ -146,7 +150,7 @@ export default function ManageProperties() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4 md:p-8">
       <div className="space-y-6">
-        {/* Delete Confirmation Modal */}
+        {/* ── Delete modal ── */}
         {deleteModal && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 animate-scale-in">
@@ -200,7 +204,7 @@ export default function ManageProperties() {
           </div>
         )}
 
-        {/* Edit Modal */}
+        {/* ── Edit modal ── */}
         {editModal && (
           <EditPropertyModal
             property={editModal}
@@ -223,7 +227,7 @@ export default function ManageProperties() {
           }
         />
 
-        {/* Search & View Toggle */}
+        {/* ── Search & toggle ── */}
         <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
@@ -255,7 +259,7 @@ export default function ManageProperties() {
           </div>
         </div>
 
-        {/* Content */}
+        {/* ── Content ── */}
         {loading ? (
           <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
             <Loader
@@ -294,8 +298,10 @@ export default function ManageProperties() {
                 property={property}
                 viewMode={viewMode}
                 formatPrice={formatPrice}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
+                onEdit={(id) =>
+                  setEditModal(properties.find((p) => p._id === id))
+                }
+                onDelete={(id) => setDeleteModal(id)}
               />
             ))}
           </div>
@@ -336,7 +342,6 @@ function EditPropertyModal({
     possession: property.possession,
     highlights: property.highlights || "",
   });
-
   const [selectedAmenities, setSelectedAmenities] = useState(
     property.amenities || [],
   );
@@ -345,69 +350,47 @@ function EditPropertyModal({
   const [deletedImages, setDeletedImages] = useState([]);
   const [saving, setSaving] = useState(false);
 
-  const toggleAmenity = (amenity) => {
+  useEffect(() => {
+    return () => newImages.forEach((img) => URL.revokeObjectURL(img.preview));
+  }, []);
+
+  const toggleAmenity = (a) =>
     setSelectedAmenities((prev) =>
-      prev.includes(amenity)
-        ? prev.filter((a) => a !== amenity)
-        : [...prev, amenity],
+      prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a],
     );
-  };
 
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files || []);
-    const valid = [];
-    const invalid = [];
-
-    files.forEach((file) => {
-      if (!file.type.startsWith("image/"))
-        invalid.push(`${file.name} (not an image)`);
-      else if (file.size > 10 * 1024 * 1024)
-        invalid.push(`${file.name} (too large)`);
-      else valid.push(file);
+    const valid = [],
+      invalid = [];
+    files.forEach((f) => {
+      if (!f.type.startsWith("image/"))
+        invalid.push(`${f.name} (not an image)`);
+      else if (f.size > 10 * 1024 * 1024) invalid.push(`${f.name} (too large)`);
+      else valid.push(f);
     });
-
-    if (invalid.length > 0) toast.error(`Skipped: ${invalid.join(", ")}`);
-
+    if (invalid.length) toast.error(`Skipped: ${invalid.join(", ")}`);
     setNewImages((prev) => [
       ...prev,
-      ...valid.map((file) => ({
-        name: file.name,
-        preview: URL.createObjectURL(file),
-        file,
+      ...valid.map((f) => ({
+        name: f.name,
+        preview: URL.createObjectURL(f),
+        file: f,
       })),
     ]);
-    if (valid.length > 0) toast.success(`Added ${valid.length} image(s)`);
+    if (valid.length) toast.success(`Added ${valid.length} image(s)`);
   };
 
-  const removeNewImage = (index) => {
-    URL.revokeObjectURL(newImages[index].preview);
-    setNewImages((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const markImageForDeletion = (imgPath) => {
-    setExistingImages((prev) => prev.filter((img) => img !== imgPath));
-    setDeletedImages((prev) => [...prev, imgPath]);
-  };
-
-  const restoreImage = (imgPath) => {
-    setDeletedImages((prev) => prev.filter((img) => img !== imgPath));
-    setExistingImages((prev) => [...prev, imgPath]);
-  };
-
-  // ── SUBMIT — calls PUT /properties/update/{dealer_id}/{property_id} ────────
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (existingImages.length === 0 && newImages.length === 0) {
+    const totalImages = existingImages.length + newImages.length;
+    if (totalImages === 0) {
       toast.error("At least one image is required");
       return;
     }
-
     setSaving(true);
     try {
       const fd = new FormData();
-
-      // Build partial update object — only changed fields
       const changedFields = {};
       if (formData.project_name !== property.project_name)
         changedFields.project_name = formData.project_name;
@@ -420,39 +403,29 @@ function EditPropertyModal({
         changedFields.possession = formData.possession;
       if (formData.highlights !== (property.highlights || ""))
         changedFields.highlights = formData.highlights;
-
-      // Always send amenities (could have changed)
       changedFields.amenities = selectedAmenities;
 
       fd.append("property_data", JSON.stringify(changedFields));
       fd.append("deleted_images", JSON.stringify(deletedImages));
-
-      // Append new image files
       newImages.forEach((img) => fd.append("images", img.file));
 
-      const response = await axios.put(
+      const res = await axios.put(
         `${BASE_URL}/properties/update/${dealerId}/${property._id}`,
         fd,
         { headers: { "Content-Type": "multipart/form-data" } },
       );
-
-      if (response.data.success) {
+      if (res.data.success) {
         toast.success(
-          `"${response.data.property.project_name}" updated successfully`,
+          `"${res.data.property.project_name}" updated successfully`,
         );
-        onUpdateSuccess(response.data.property); // ← update local state in parent
+        onUpdateSuccess(res.data.property);
       }
-    } catch (error) {
-      console.error("❌ Update error:", error);
-      toast.error(error.response?.data?.detail || "Failed to update property");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to update property");
     } finally {
       setSaving(false);
     }
   };
-
-  useEffect(() => {
-    return () => newImages.forEach((img) => URL.revokeObjectURL(img.preview));
-  }, []);
 
   const totalImages = existingImages.length + newImages.length;
 
@@ -460,7 +433,6 @@ function EditPropertyModal({
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 overflow-y-auto">
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto animate-scale-in">
-          {/* Header */}
           <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-3xl z-10">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -500,11 +472,11 @@ function EditPropertyModal({
                   <input
                     type="text"
                     value={formData.project_name}
+                    required
                     onChange={(e) =>
                       setFormData({ ...formData, project_name: e.target.value })
                     }
                     className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none transition"
-                    required
                   />
                 </div>
                 <div>
@@ -514,11 +486,11 @@ function EditPropertyModal({
                   <input
                     type="text"
                     value={formData.location}
+                    required
                     onChange={(e) =>
                       setFormData({ ...formData, location: e.target.value })
                     }
                     className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none transition"
-                    required
                   />
                 </div>
                 <div>
@@ -528,11 +500,11 @@ function EditPropertyModal({
                   <input
                     type="number"
                     value={formData.price}
+                    required
                     onChange={(e) =>
                       setFormData({ ...formData, price: e.target.value })
                     }
                     className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none transition"
-                    required
                   />
                   {formData.price && (
                     <p className="text-blue-600 text-sm mt-1 font-medium">
@@ -587,11 +559,11 @@ function EditPropertyModal({
               <textarea
                 rows={3}
                 value={formData.highlights}
+                placeholder="Property highlights..."
                 onChange={(e) =>
                   setFormData({ ...formData, highlights: e.target.value })
                 }
                 className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none transition resize-none"
-                placeholder="Property highlights..."
               />
             </div>
 
@@ -602,19 +574,19 @@ function EditPropertyModal({
                 {selectedAmenities.length} selected)
               </h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {amenitiesList.map((amenity) => (
+                {amenitiesList.map((a) => (
                   <button
-                    key={amenity}
+                    key={a}
                     type="button"
-                    onClick={() => toggleAmenity(amenity)}
+                    onClick={() => toggleAmenity(a)}
                     className={`px-3 py-2 rounded-lg border-2 transition text-sm font-medium flex items-center gap-2 ${
-                      selectedAmenities.includes(amenity)
+                      selectedAmenities.includes(a)
                         ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-blue-600"
                         : "bg-white text-gray-700 border-gray-200 hover:border-blue-400"
                     }`}
                   >
-                    {selectedAmenities.includes(amenity) && <Check size={14} />}
-                    {amenity}
+                    {selectedAmenities.includes(a) && <Check size={14} />}
+                    {a}
                   </button>
                 ))}
               </div>
@@ -644,30 +616,27 @@ function EditPropertyModal({
                     {existingImages.map((img, idx) => (
                       <div key={`existing-${idx}`} className="relative group">
                         <img
-                          src={`${BASE_URL}/${img}`}
+                          src={getImageUrl(img)}
                           alt={`Property ${idx + 1}`}
                           className="w-full h-32 object-cover rounded-xl border-2 border-gray-200"
                           onError={(e) => {
-                            console.error(
-                              `Image failed to load: ${BASE_URL}/${img}`,
-                            );
+                            console.error(`Image failed: ${getImageUrl(img)}`);
                             e.target.style.display = "none";
-                            e.target.parentElement
-                              .querySelector(".img-error")
-                              ?.remove();
-                            const errDiv = document.createElement("div");
-                            errDiv.className =
-                              "img-error w-full h-32 rounded-xl border-2 border-red-300 bg-red-50 flex items-center justify-center text-red-400 text-xs font-medium";
-                            errDiv.textContent = `Failed: ${img}`;
-                            e.target.parentElement.insertBefore(
-                              errDiv,
-                              e.target,
-                            );
+                            const d = document.createElement("div");
+                            d.className =
+                              "w-full h-32 rounded-xl border-2 border-red-300 bg-red-50 flex items-center justify-center text-red-400 text-xs text-center p-1";
+                            d.textContent = "Failed to load";
+                            e.target.parentElement.insertBefore(d, e.target);
                           }}
                         />
                         <button
                           type="button"
-                          onClick={() => markImageForDeletion(img)}
+                          onClick={() => {
+                            setExistingImages((prev) =>
+                              prev.filter((x) => x !== img),
+                            );
+                            setDeletedImages((prev) => [...prev, img]);
+                          }}
                           className="absolute -top-2 -right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           <X size={16} />
@@ -691,30 +660,21 @@ function EditPropertyModal({
                     {deletedImages.map((img, idx) => (
                       <div key={`deleted-${idx}`} className="relative">
                         <img
-                          src={`${BASE_URL}/${img}`}
+                          src={getImageUrl(img)}
                           alt={`Deleted ${idx + 1}`}
                           className="w-full h-32 object-cover rounded-xl border-2 border-red-300 opacity-50"
                           onError={(e) => {
-                            console.error(
-                              `Image failed to load: ${BASE_URL}/${img}`,
-                            );
                             e.target.style.display = "none";
-                            e.target.parentElement
-                              .querySelector(".img-error")
-                              ?.remove();
-                            const errDiv = document.createElement("div");
-                            errDiv.className =
-                              "img-error w-full h-32 rounded-xl border-2 border-red-300 bg-red-50 flex items-center justify-center text-red-400 text-xs font-medium";
-                            errDiv.textContent = `Failed: ${img}`;
-                            e.target.parentElement.insertBefore(
-                              errDiv,
-                              e.target,
-                            );
                           }}
                         />
                         <button
                           type="button"
-                          onClick={() => restoreImage(img)}
+                          onClick={() => {
+                            setDeletedImages((prev) =>
+                              prev.filter((x) => x !== img),
+                            );
+                            setExistingImages((prev) => [...prev, img]);
+                          }}
                           className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-xl text-white text-sm font-medium hover:bg-black/80 transition"
                         >
                           ↻ Restore
@@ -741,7 +701,12 @@ function EditPropertyModal({
                         />
                         <button
                           type="button"
-                          onClick={() => removeNewImage(idx)}
+                          onClick={() => {
+                            URL.revokeObjectURL(newImages[idx].preview);
+                            setNewImages((prev) =>
+                              prev.filter((_, i) => i !== idx),
+                            );
+                          }}
                           className="absolute -top-2 -right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           <X size={16} />
@@ -809,11 +774,8 @@ function EditPropertyModal({
   );
 }
 
-// ─── PROPERTY CARD (unchanged) ────────────────────────────────────────────────
+// ─── PROPERTY CARD ────────────────────────────────────────────────────────────
 function PropertyCard({ property, viewMode, formatPrice, onEdit, onDelete }) {
-  const getImageUrl = (imagePath) =>
-    imagePath?.startsWith("http") ? imagePath : `${BASE_URL}/${imagePath}`;
-
   if (viewMode === "list") {
     return (
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition border border-gray-100">
@@ -823,6 +785,9 @@ function PropertyCard({ property, viewMode, formatPrice, onEdit, onDelete }) {
               src={getImageUrl(property.images?.[0])}
               alt={property.project_name}
               className="w-full h-full object-cover"
+              onError={(e) => {
+                e.target.style.display = "none";
+              }}
             />
           </div>
           <div className="flex-1 p-6">
@@ -877,16 +842,12 @@ function PropertyCard({ property, viewMode, formatPrice, onEdit, onDelete }) {
           alt={property.project_name}
           className="w-full h-full object-cover"
           onError={(e) => {
-            console.error(
-              `Image failed to load: ${getImageUrl(property.images?.[0])}`,
-            );
             e.target.style.display = "none";
-            e.target.parentElement.querySelector(".img-error")?.remove();
-            const errDiv = document.createElement("div");
-            errDiv.className =
-              "img-error w-full h-full flex items-center justify-center bg-red-50 border-2 border-red-300 rounded text-red-400 text-xs font-medium p-2 text-center";
-            errDiv.textContent = `Failed: ${property.images?.[0]}`;
-            e.target.parentElement.insertBefore(errDiv, e.target);
+            const d = document.createElement("div");
+            d.className =
+              "w-full h-full flex items-center justify-center bg-gray-100 text-gray-400 text-sm";
+            d.textContent = "Image unavailable";
+            e.target.parentElement.insertBefore(d, e.target);
           }}
         />
       </div>

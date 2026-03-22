@@ -123,7 +123,7 @@ export const LEAD_SOURCES = [
   "Manual",
   "Broadcast",
   "Cold Lead",
-  "Cold Lead",
+  "Digital Marketing",
 ];
 
 export const VISIT_STATUSES = [
