@@ -43,6 +43,7 @@ import LeadsVisits from "./LeadsVisits";
 import ManageDealers from "./ManageDealers";
 import TopDealers from "./TopDealers";
 import SalesTargets from "./SalesTargets";
+import S3Tester from "./S3Tester";
 
 /* ── Nav Config ─────────────────────────────────────────────────────────────── */
 const NAV_CONFIG = {
@@ -188,11 +189,11 @@ const NAV_CONFIG = {
     },
     // {
     //   id: "sales-targets",
-    //   label: "Sales Targets",
+    //   label: "S3 Tester",
     //   icon: Target,
     //   color: "from-orange-500 to-amber-500",
     //   description: "Daily targets & team progress",
-    //   component: <SalesTargets />,
+    //   component: <S3Tester />,
     // },
   ],
 
@@ -271,7 +272,7 @@ const getAvatarInitials = (name) => {
     .split(" ")
     .map((w) => w[0])
     .join("")
-    .slice(0, 2)
+    .slice(0, 1)
     .toUpperCase();
 };
 
@@ -282,6 +283,13 @@ const getBusinessName = () => {
     authUser.dealer?.business_name ||
     "PropPilot CRM"
   );
+};
+
+const getLogoUrl = () => {
+  const authUser = JSON.parse(localStorage.getItem("auth_user")) || {};
+  // DEALER role — logo is inside dealer object
+  // DEALER_USER role — logo is inside dealer object (fetched at login)
+  return authUser?.dealer?.logo_url || null;
 };
 
 /* ── Dashboard ────────────────────────────────────────────────────────────── */
@@ -346,11 +354,23 @@ export default function Dashboard() {
       <div className="p-5 border-b border-gray-100">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 shadow-lg">
-            <img
-              src="/Finayer Logo.png"
-              alt="Finayer Logo"
-              className="w-full h-full object-contain"
-            />
+            {getLogoUrl() ? (
+              <img
+                src={getLogoUrl()}
+                alt="Logo"
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  // fallback to default if S3 image fails to load
+                  e.target.src = "/Finayer Logo.png";
+                }}
+              />
+            ) : (
+              <img
+                src="/Finayer Logo.png"
+                alt="Finayer Logo"
+                className="w-full h-full object-contain"
+              />
+            )}
           </div>
           <div className="min-w-0">
             <h1 className="text-base font-black text-gray-800 leading-none">
@@ -466,7 +486,10 @@ export default function Dashboard() {
           <div className="flex items-center gap-2 shrink-0">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center text-white font-bold text-xs shadow-sm shrink-0">
-                {getAvatarInitials(role)}
+                {getAvatarInitials(
+                  JSON.parse(localStorage.getItem("auth_user") || "{}").dealer
+                    ?.business_name,
+                )}
               </div>
             </div>
           </div>
