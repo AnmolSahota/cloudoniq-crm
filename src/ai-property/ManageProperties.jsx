@@ -28,7 +28,7 @@ import { bhkOptions } from "./mockData";
 //   3. Old disk path     (uploads/...)   → prepend BASE_URL (backward compat)
 const S3_PUBLIC_URL =
   process.env.REACT_APP_S3_PUBLIC_URL ||
-  "https://crm-proppilot.s3.us-east-1.amazonaws.com";
+  "https://s3.ap-south-1.amazonaws.com/realty.cloudoniqtechnologies.com";
 
 const getImageUrl = (keyOrUrl) => {
   if (!keyOrUrl) return null;
