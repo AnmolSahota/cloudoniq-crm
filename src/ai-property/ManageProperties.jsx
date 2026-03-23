@@ -350,10 +350,6 @@ function EditPropertyModal({
   const [deletedImages, setDeletedImages] = useState([]);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    return () => newImages.forEach((img) => URL.revokeObjectURL(img.preview));
-  }, []);
-
   const toggleAmenity = (a) =>
     setSelectedAmenities((prev) =>
       prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a],
@@ -361,24 +357,33 @@ function EditPropertyModal({
 
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files || []);
-    const valid = [],
-      invalid = [];
+    const valid = [];
+    const invalid = [];
+
     files.forEach((f) => {
       if (!f.type.startsWith("image/"))
         invalid.push(`${f.name} (not an image)`);
       else if (f.size > 10 * 1024 * 1024) invalid.push(`${f.name} (too large)`);
       else valid.push(f);
     });
+
     if (invalid.length) toast.error(`Skipped: ${invalid.join(", ")}`);
-    setNewImages((prev) => [
-      ...prev,
-      ...valid.map((f) => ({
-        name: f.name,
-        preview: URL.createObjectURL(f),
-        file: f,
-      })),
-    ]);
-    if (valid.length) toast.success(`Added ${valid.length} image(s)`);
+
+    // ── Same as AddPropertyForm — use base64 not blob URL ──────────────
+    const readerPromises = valid.map(
+      (f) =>
+        new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) =>
+            resolve({ name: f.name, preview: e.target.result, file: f });
+          reader.readAsDataURL(f); // ← base64, works on all origins + mobile ✅
+        }),
+    );
+
+    Promise.all(readerPromises).then((newImgs) => {
+      setNewImages((prev) => [...prev, ...newImgs]);
+      if (valid.length) toast.success(`Added ${valid.length} image(s)`);
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -702,7 +707,6 @@ function EditPropertyModal({
                         <button
                           type="button"
                           onClick={() => {
-                            URL.revokeObjectURL(newImages[idx].preview);
                             setNewImages((prev) =>
                               prev.filter((_, i) => i !== idx),
                             );
