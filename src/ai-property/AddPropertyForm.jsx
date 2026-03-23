@@ -727,7 +727,7 @@ export default function AddPropertyForm() {
               iconBg="bg-pink-50"
               iconColor="text-pink-500"
               title="Property Images"
-              subtitle="Upload high quality photos — PNG, JPG up to 10MB each"
+              subtitle="Upload high quality photos — PNG, JPG up to 1MB each"
             />
 
             {/* Previews */}

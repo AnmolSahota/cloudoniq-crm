@@ -768,7 +768,7 @@ function EditPropertyModal({
                       Add More Images
                     </p>
                     <p className="text-sm text-gray-500">
-                      PNG, JPG up to 10MB each
+                      PNG, JPG up to 1MB each
                     </p>
                   </>
                 )}
