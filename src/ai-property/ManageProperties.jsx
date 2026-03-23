@@ -346,6 +346,7 @@ function EditPropertyModal({
   const [selectedAmenities, setSelectedAmenities] = useState(
     property.amenities || [],
   );
+  const [compressing, setCompressing] = useState(false);
   const [existingImages, setExistingImages] = useState(property.images || []);
   const [newImages, setNewImages] = useState([]);
   const [deletedImages, setDeletedImages] = useState([]);
@@ -371,10 +372,11 @@ function EditPropertyModal({
     if (invalid.length) toast.error(`Skipped: ${invalid.join(", ")}`);
     if (!valid.length) return;
 
+    setCompressing(true);
 
     const options = {
       maxSizeMB: 0.1,
-      maxWidthOrHeight: 1920,
+      maxWidthOrHeight: 1280,
       useWebWorker: true,
     };
 
@@ -387,12 +389,13 @@ function EditPropertyModal({
           return { name: f.name, preview, file: compressedFile };
         }),
       );
-
       setNewImages((prev) => [...prev, ...compressed]);
       toast.success(`Added ${valid.length} image(s)`);
     } catch (err) {
       toast.error("Failed to compress images. Please try again.");
       console.error(err);
+    } finally {
+      setCompressing(false);
     }
   };
 
@@ -735,21 +738,40 @@ function EditPropertyModal({
               )}
 
               {/* Upload more */}
-              <label className="border-2 border-dashed border-gray-300 rounded-2xl p-6 text-center hover:border-blue-500 transition cursor-pointer bg-gradient-to-br from-gray-50 to-blue-50 hover:from-blue-50 hover:to-indigo-50 block">
+              <label
+                className={`border-2 border-dashed rounded-2xl p-6 text-center transition cursor-pointer block
+  ${
+    compressing
+      ? "border-indigo-300 bg-indigo-50 cursor-not-allowed"
+      : "border-gray-300 bg-gradient-to-br from-gray-50 to-blue-50 hover:border-blue-500 hover:from-blue-50 hover:to-indigo-50"
+  }`}
+              >
                 <input
                   type="file"
                   multiple
                   accept="image/*"
                   onChange={handleImageUpload}
+                  disabled={saving || compressing}
                   className="hidden"
                 />
-                <Upload className="mx-auto text-gray-400 mb-3" size={40} />
-                <p className="text-gray-600 font-semibold mb-1">
-                  Add More Images
-                </p>
-                <p className="text-sm text-gray-500">
-                  PNG, JPG up to 10MB each
-                </p>
+                {compressing ? (
+                  <>
+                    <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                    <p className="text-indigo-600 font-semibold mb-1">
+                      Processing images...
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mx-auto text-gray-400 mb-3" size={40} />
+                    <p className="text-gray-600 font-semibold mb-1">
+                      Add More Images
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      PNG, JPG up to 10MB each
+                    </p>
+                  </>
+                )}
               </label>
             </div>
 

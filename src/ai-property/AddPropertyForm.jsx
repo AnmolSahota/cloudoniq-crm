@@ -200,6 +200,7 @@ export default function AddPropertyForm() {
   });
 
   const [selectedAmenities, setSelectedAmenities] = useState([]);
+  const [compressing, setCompressing] = useState(false);
   const [images, setImages] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
@@ -393,8 +394,10 @@ export default function AddPropertyForm() {
     if (invalid.length) toast.error(`Skipped: ${invalid.join(", ")}`);
     if (!valid.length) return;
 
+    setCompressing(true);
+
     const options = {
-      maxSizeMB: 0.5,
+      maxSizeMB: 0.1,
       maxWidthOrHeight: 1280,
       useWebWorker: true,
     };
@@ -423,6 +426,8 @@ export default function AddPropertyForm() {
     } catch (err) {
       toast.error("Failed to compress images. Please try again.");
       console.error(err);
+    } finally {
+      setCompressing(false);
     }
   };
 
@@ -753,11 +758,13 @@ export default function AddPropertyForm() {
 
             <label
               className={`flex flex-col items-center justify-center border-2 border-dashed rounded-2xl p-8 cursor-pointer transition-all
-              ${
-                errors.images
-                  ? "border-red-300 bg-red-50/50 hover:border-red-400"
-                  : "border-gray-300 bg-gray-50 hover:border-indigo-400 hover:bg-indigo-50/30"
-              } ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""}`}
+  ${
+    compressing
+      ? "border-indigo-300 bg-indigo-50/50 cursor-not-allowed"
+      : errors.images
+        ? "border-red-300 bg-red-50/50 hover:border-red-400"
+        : "border-gray-300 bg-gray-50 hover:border-indigo-400 hover:bg-indigo-50/30"
+  } ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""}`}
             >
               <input
                 type="file"
@@ -765,22 +772,36 @@ export default function AddPropertyForm() {
                 accept="image/*"
                 onChange={handleImageUpload}
                 className="hidden"
-                disabled={isSubmitting}
+                disabled={isSubmitting || compressing}
               />
-              <Upload
-                size={36}
-                className={
-                  errors.images ? "text-red-300 mb-3" : "text-gray-400 mb-3"
-                }
-              />
-              <p className="text-sm font-semibold text-gray-700 mb-1">
-                Click to upload property images
-              </p>
-              <p className="text-xs text-gray-400">PNG, JPG up to 10MB each</p>
-              {images.length > 0 && (
-                <p className="text-xs text-indigo-600 font-semibold mt-2">
-                  {images.length} image{images.length > 1 ? "s" : ""} selected
-                </p>
+              {compressing ? (
+                <>
+                  <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3" />
+                  <p className="text-sm font-semibold text-indigo-600 mb-1">
+                    Processing images...
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Upload
+                    size={36}
+                    className={
+                      errors.images ? "text-red-300 mb-3" : "text-gray-400 mb-3"
+                    }
+                  />
+                  <p className="text-sm font-semibold text-gray-700 mb-1">
+                    Click to upload property images
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    PNG, JPG up to 1MB each
+                  </p>
+                  {images.length > 0 && (
+                    <p className="text-xs text-indigo-600 font-semibold mt-2">
+                      {images.length} image{images.length > 1 ? "s" : ""}{" "}
+                      selected
+                    </p>
+                  )}
+                </>
               )}
             </label>
 
