@@ -378,45 +378,6 @@ export default function AddPropertyForm() {
     });
   };
 
-  // const handleImageUpload = (e) => {
-  //   const files = Array.from(e.target.files || []);
-  //   const valid = [],
-  //     invalid = [];
-
-  //   files.forEach((f) => {
-  //     if (!f.type.startsWith("image/"))
-  //       invalid.push(`${f.name} (not an image)`);
-  //     else if (f.size > 10 * 1024 * 1024) invalid.push(`${f.name} (max 10MB)`);
-  //     else valid.push(f);
-  //   });
-
-  //   if (invalid.length) toast.error(`Skipped: ${invalid.join(", ")}`);
-
-  //   // Convert each file to base64 instead of blob URL
-  //   const readerPromises = valid.map(
-  //     (f) =>
-  //       new Promise((resolve) => {
-  //         const reader = new FileReader();
-  //         reader.onload = (e) =>
-  //           resolve({ name: f.name, preview: e.target.result, file: f });
-  //         reader.readAsDataURL(f); // ← base64 data URL, works on all origins
-  //       }),
-  //   );
-
-  //   Promise.all(readerPromises).then((newImgs) => {
-  //     setImages((prev) => {
-  //       const next = [...prev, ...newImgs];
-  //       setErrors((e) => ({
-  //         ...e,
-  //         images:
-  //           next.length === 0 ? "At least one image is required" : undefined,
-  //       }));
-  //       return next;
-  //     });
-  //     if (valid.length) toast.success(`Added ${valid.length} image(s)`);
-  //   });
-  // };
-
   const handleImageUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     const valid = [],
@@ -433,7 +394,7 @@ export default function AddPropertyForm() {
     if (!valid.length) return;
 
     const options = {
-      maxSizeMB: 0.8,
+      maxSizeMB: 0.5,
       maxWidthOrHeight: 1280,
       useWebWorker: true,
     };

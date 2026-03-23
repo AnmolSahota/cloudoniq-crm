@@ -20,6 +20,7 @@ import {
 import { BASE_URL } from "./config";
 import { PageHeader } from "./SharedComponents";
 import { bhkOptions } from "./mockData";
+import imageCompression from "browser-image-compression";
 
 // ── S3 image URL helper ────────────────────────────────────────────────────────
 // Handles 3 cases:
@@ -355,35 +356,44 @@ function EditPropertyModal({
       prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a],
     );
 
-  const handleImageUpload = (e) => {
+  const handleImageUpload = async (e) => {
     const files = Array.from(e.target.files || []);
-    const valid = [];
-    const invalid = [];
+    const valid = [],
+      invalid = [];
 
     files.forEach((f) => {
       if (!f.type.startsWith("image/"))
         invalid.push(`${f.name} (not an image)`);
-      else if (f.size > 10 * 1024 * 1024) invalid.push(`${f.name} (too large)`);
+      else if (f.size > 10 * 1024 * 1024) invalid.push(`${f.name} (max 10MB)`);
       else valid.push(f);
     });
 
     if (invalid.length) toast.error(`Skipped: ${invalid.join(", ")}`);
+    if (!valid.length) return;
 
-    // ── Same as AddPropertyForm — use base64 not blob URL ──────────────
-    const readerPromises = valid.map(
-      (f) =>
-        new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onload = (e) =>
-            resolve({ name: f.name, preview: e.target.result, file: f });
-          reader.readAsDataURL(f); // ← base64, works on all origins + mobile ✅
+
+    const options = {
+      maxSizeMB: 0.1,
+      maxWidthOrHeight: 1920,
+      useWebWorker: true,
+    };
+
+    try {
+      const compressed = await Promise.all(
+        valid.map(async (f) => {
+          const compressedFile = await imageCompression(f, options);
+          const preview =
+            await imageCompression.getDataUrlFromFile(compressedFile);
+          return { name: f.name, preview, file: compressedFile };
         }),
-    );
+      );
 
-    Promise.all(readerPromises).then((newImgs) => {
-      setNewImages((prev) => [...prev, ...newImgs]);
-      if (valid.length) toast.success(`Added ${valid.length} image(s)`);
-    });
+      setNewImages((prev) => [...prev, ...compressed]);
+      toast.success(`Added ${valid.length} image(s)`);
+    } catch (err) {
+      toast.error("Failed to compress images. Please try again.");
+      console.error(err);
+    }
   };
 
   const handleSubmit = async (e) => {
