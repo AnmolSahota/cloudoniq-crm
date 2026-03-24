@@ -1,5 +1,7 @@
 // src/pages/Dashboard.jsx
-
+import { Outlet } from "react-router-dom";
+import { logoutUser } from "./authApi";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Activity,
   BarChart3,
@@ -18,13 +20,14 @@ import {
   Users,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+
 
 // Dealer CRM Views
 import BroadcastSystem from "./BroadcastingCRM";
 import CalendarView from "./CalendarView";
 import DealerDashboard from "./DealerDashboard";
 import LeadManagement from "./LeadManagement";
+import ProspectView from "../ui/ProspectView";
 import ManageSalesTeam from "./ManageSalesTeam";
 import PropertyPerformance from "./PropertyAnalytics";
 import SiteVisits from "./SiteVisits";
@@ -100,7 +103,7 @@ const NAV_CONFIG = {
 
   DEALER: [
     {
-      id: "dashboard",
+      id: "",
       label: "Dashboard",
       icon: LayoutDashboard,
       color: "from-indigo-600 to-violet-600",
@@ -116,7 +119,7 @@ const NAV_CONFIG = {
       component: <LeadManagement />,
     },
     {
-      id: "site-visits",
+      id: "visits",
       label: "Site Visits",
       icon: Home,
       color: "from-teal-500 to-cyan-600",
@@ -148,7 +151,7 @@ const NAV_CONFIG = {
       component: <BroadcastSystem />,
     },
     {
-      id: "property-analytics",
+      id: "analytics",
       label: "Property Analytics",
       icon: BarChart3,
       color: "from-emerald-500 to-green-600",
@@ -172,7 +175,7 @@ const NAV_CONFIG = {
       component: <AddPropertyForm />,
     },
     {
-      id: "manage-properties",
+      id: "properties",
       label: "Manage Properties",
       icon: List,
       color: "from-cyan-600 to-blue-600",
@@ -180,13 +183,21 @@ const NAV_CONFIG = {
       component: <ManageProperties />,
     },
     {
-      id: "manage-users",
+      id: "users",
       label: "Manage Users",
       icon: UserCog,
       color: "from-rose-500 to-pink-600",
       description: "Manage your team users",
       component: <ManageSalesTeam />,
     },
+    {
+  id: "prospect",
+  label: "Prospect",
+  icon: Target,
+  color: "from-pink-500 to-rose-600",
+  description: "View prospect details",
+  component: <ProspectView />,
+},
     // {
     //   id: "sales-targets",
     //   label: "S3 Tester",
@@ -295,59 +306,51 @@ const getLogoUrl = () => {
 /* ── Dashboard ────────────────────────────────────────────────────────────── */
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const role = JSON.parse(localStorage.getItem("auth_user"))?.role || null;
+  const authUserRaw = localStorage.getItem("auth_user");
+let role = null;
+
+try {
+  const authUser = JSON.parse(authUserRaw || "{}");
+  role = authUser.role;
+} catch (e) {
+  console.error("Invalid auth_user JSON");
+}
   const navigationItems = useMemo(() => NAV_CONFIG[role] || [], [role]);
+  const currentItem = navigationItems.find((item) =>
+  location.pathname.includes(item.id)
+);
   const brand = ROLE_BRAND[role] || ROLE_BRAND.DEALER;
 
   // Get current view from URL params, fallback to first item
-  const getInitialView = useCallback(() => {
-    const viewFromUrl = searchParams.get("view");
-    if (
-      viewFromUrl &&
-      navigationItems.some((item) => item.id === viewFromUrl)
-    ) {
-      return viewFromUrl;
-    }
-    return navigationItems[0]?.id || "";
-  }, [searchParams, navigationItems]);
 
-  const [currentView, setCurrentView] = useState(getInitialView);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  
+
+
 
   useEffect(() => {
-    const viewFromUrl = searchParams.get("view");
-    const validView = navigationItems.some((item) => item.id === viewFromUrl);
-
-    if (validView) {
-      setCurrentView(viewFromUrl);
-    } else if (navigationItems.length > 0) {
-      const defaultView = navigationItems[0].id;
-      setCurrentView(defaultView);
-      setSearchParams({ view: defaultView }, { replace: true });
-    }
-  }, [navigationItems, searchParams, setSearchParams]);
-
-  const handleViewChange = useCallback(
-    (viewId) => {
-      setCurrentView(viewId);
-      setSearchParams({ view: viewId }, { replace: true });
-      setSidebarOpen(false);
-    },
-    [setSearchParams],
-  );
-
-  useEffect(() => {
-    if (!role) navigate("/login");
+    if (!authUserRaw || !role) {
+  console.log("No role found, redirecting...");
+  navigate("/login");
+}
   }, [role, navigate]);
 
-  const handleLogout = () => {
-    localStorage.clear();
-    navigate("/login");
-  };
+ const handleLogout = async () => {
+  try {
+    await logoutUser(); // call backend
+  } catch (e) {
+    console.log("Logout API failed");
+  }
 
-  const currentItem = navigationItems.find((i) => i.id === currentView);
+  localStorage.removeItem("auth_user");
+
+  navigate("/login");
+};
+
+  
 
   const SidebarInner = () => (
     <>
@@ -387,11 +390,14 @@ export default function Dashboard() {
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
         {navigationItems.map((item) => {
           const Icon = item.icon;
-          const isActive = currentView === item.id;
+          
+
+
+const isActive = location.pathname === `/dashboard/${item.id}`;
           return (
             <button
               key={item.id}
-              onClick={() => handleViewChange(item.id)}
+              onClick={() => navigate(`/dashboard/${item.id}`)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
                 isActive
                   ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md"
@@ -497,7 +503,7 @@ export default function Dashboard() {
 
         {/* ── Active view ── */}
         <div className="flex-1 overflow-auto bg-gray-50">
-          {currentItem?.component ?? null}
+          <Outlet />
         </div>
       </div>
     </div>

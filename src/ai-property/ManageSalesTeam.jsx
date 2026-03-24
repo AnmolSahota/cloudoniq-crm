@@ -161,8 +161,8 @@ const UserPanel = ({ onClose, onSave, editMember }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col">
+    <div className="fixed inset-0 z-50 flex justify-end items-start">
+   <div className="w-full max-w-md bg-white h-screen shadow-2xl flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-5 flex items-center justify-between text-white">
           <div>

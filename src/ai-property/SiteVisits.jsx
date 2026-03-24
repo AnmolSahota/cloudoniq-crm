@@ -341,8 +341,8 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-start">
-      <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col">
+    <div className="fixed top-0 left-0 w-screen h-screen z-[9999] flex justify-start m-0 p-0">
+      <div className="w-full max-w-md bg-white h-screen shadow-2xl flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-5 text-white">
           <div className="flex items-start justify-between">
