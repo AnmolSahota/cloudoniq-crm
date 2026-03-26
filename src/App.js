@@ -3,6 +3,7 @@ import { ToastContainer } from "react-toastify";
 
 import Dashboard from "./ai-property/Dashboard";
 import LoginForm from "./ai-property/AuthForm";
+import WhatsAppTester from "./ai-property/Wp";
 
 function AppContent() {
   return (
@@ -13,6 +14,7 @@ function AppContent() {
 
         {/* Dashboard */}
         <Route path="/dashboard/*" element={<Dashboard />} />
+        <Route path="/wp" element={<WhatsAppTester />} />
 
         {/* Default redirect */}
         <Route path="/" element={<Navigate to="/login" replace />} />
