@@ -44,6 +44,7 @@ import ManageDealers from "./ManageDealers";
 import TopDealers from "./TopDealers";
 import SalesTargets from "./SalesTargets";
 import S3Tester from "./S3Tester";
+import WhatsAppTester from "./Wp";
 
 /* ── Nav Config ─────────────────────────────────────────────────────────────── */
 const NAV_CONFIG = {
@@ -194,6 +195,14 @@ const NAV_CONFIG = {
     //   color: "from-orange-500 to-amber-500",
     //   description: "Daily targets & team progress",
     //   component: <S3Tester />,
+    // },
+    // {
+    //   id: "whatasp",
+    //   label: "whatasp",
+    //   icon: Target,
+    //   color: "from-orange-500 to-amber-500",
+    //   description: "Daily targets & team progress",
+    //   component: <WhatsAppTester />,
     // },
   ],
 
