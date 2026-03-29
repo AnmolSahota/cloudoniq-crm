@@ -80,7 +80,16 @@ const LoginForm = () => {
       });
       if (!res.data?.success)
         throw new Error(res.data?.error || "Login failed");
-      localStorage.setItem("auth_user", JSON.stringify(res.data.data));
+      // localStorage.setItem("auth_user", JSON.stringify(res.data.data));
+      const userData = res.data.data;
+      const resolvedRole =
+        userData.role === "SUPER_ADMIN" || userData.role === "DEALER"
+          ? userData.role
+          : "DEALER_USER";
+      localStorage.setItem(
+        "auth_user",
+        JSON.stringify({ ...userData, role: resolvedRole }),
+      );
       toast.success("Welcome back! Redirecting…");
       setTimeout(() => navigate("/dashboard"), 700);
     } catch (error) {
@@ -145,7 +154,7 @@ const LoginForm = () => {
         {/* ── LEFT PANEL ─────────────────────────────────────────────────── */}
         <div className="relative flex-[1.1] bg-gradient-to-br from-[#0d1b2a] via-[#1a2e1e] via-[70%] to-[#0a1a0d] overflow-hidden hidden md:flex flex-col justify-end p-14">
           <GridDots />
-          
+
           {/* Orbs */}
           <div className="absolute -top-[120px] -left-[80px] w-[500px] h-[500px] rounded-full bg-[radial-gradient(circle,rgba(52,211,153,0.18)_0%,transparent_70%)] pointer-events-none" />
           <div className="absolute bottom-[60px] -right-[100px] w-[380px] h-[380px] rounded-full bg-[radial-gradient(circle,rgba(16,185,129,0.12)_0%,transparent_70%)] pointer-events-none" />
@@ -337,7 +346,10 @@ const LoginForm = () => {
             {/* Footer */}
             <p className="mt-8 text-center text-xs text-gray-400 animate-slide-up-5">
               Need access?{" "}
-              <a href="#" className="text-emerald-600 font-medium hover:underline">
+              <a
+                href="#"
+                className="text-emerald-600 font-medium hover:underline"
+              >
                 Contact your administrator
               </a>
             </p>

@@ -1,9 +1,8 @@
-// src/pages/dealer/ManageSalesTeam.jsx
-
 import axios from "axios";
 import {
   Building2,
   Calendar,
+  ChevronDown,
   Eye,
   EyeOff,
   ExternalLink,
@@ -16,13 +15,25 @@ import {
   UserPlus,
   Users,
   X,
+  Check,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EmptyState, PageHeader, StatusDot } from "./SharedComponents";
 import { BASE_URL } from "./config";
 
 const getDealerId = () =>
   JSON.parse(localStorage.getItem("auth_user"))?.id || "";
+
+const ROLE_OPTIONS = [
+  { value: "SALES_USER", label: "Sales User" },
+  { value: "MANAGER", label: "Manager" },
+  { value: "CALLER", label: "Caller" },
+  { value: "TEAM_LEAD", label: "Team Lead" },
+  { value: "RM", label: "RM" },
+];
+
+const getRoleLabel = (value) =>
+  ROLE_OPTIONS.find((r) => r.value === value)?.label ?? value ?? "—";
 
 const INIT_FORM = {
   name: "",
@@ -31,46 +42,231 @@ const INIT_FORM = {
   joined_at: "",
   password: "",
   confirmPassword: "",
-  user_type: "INTERNAL", // NEW: default to INTERNAL
+  user_type: "INTERNAL",
+  role: "",
+  reporting_person_id: "", // single user id
 };
 
 const inputCls =
   "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none " +
   "focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition bg-gray-50 focus:bg-white";
 
-// ── Shape user + inject counts from maps ──────────────────────────────────────
 const shapeMember = (u, leadsMap = {}, visitsMap = {}) => ({
   id: u.id,
   name: u.name ?? "—",
   email: u.email ?? "—",
   phone: u.phone ?? "—",
-  role: u.role ?? "DEALER_USER",
-  user_type: u.user_type ?? "INTERNAL", // NEW
+  role: u.role ?? "",
+  user_type: u.user_type ?? "INTERNAL",
   is_active: u.is_active ?? true,
   status: (u.is_active ?? true) ? "ACTIVE" : "INACTIVE",
   joined_at: u.joined_at ?? null,
+  reporting_person_id: u.reporting_person_id ?? null,
   assigned_leads: leadsMap[u.id] ?? 0,
   completed_visits: visitsMap[u.id] ?? 0,
   closed_deals: 0,
 });
 
-// ── User Type Badge Component ─────────────────────────────────────────────────
+/* ─── USER TYPE BADGE ─────────────────────────────────────────────────────── */
 const UserTypeBadge = ({ type }) => {
+  if (!type) return null;
   const isInternal = type === "INTERNAL";
   return (
     <span
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-        isInternal ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+        isInternal
+          ? "bg-blue-50 text-blue-600 border border-blue-100"
+          : "bg-amber-50 text-amber-600 border border-amber-100"
       }`}
     >
-      {isInternal ? <Building2 size={10} /> : <ExternalLink size={10} />}
+      {isInternal ? <Building2 size={9} /> : <ExternalLink size={9} />}
       {isInternal ? "Internal" : "External"}
     </span>
   );
 };
 
-/* ─── SLIDE-IN PANEL ─────────────────────────────────────────────────────────── */
-const UserPanel = ({ onClose, onSave, editMember }) => {
+/* ─── ROLE BADGE ──────────────────────────────────────────────────────────── */
+const RoleBadge = ({ role }) => {
+  if (!role) return null;
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">
+      {getRoleLabel(role)}
+    </span>
+  );
+};
+
+/* ─── ROLE DROPDOWN ───────────────────────────────────────────────────────── */
+const RoleDropdown = ({ value, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const selected = ROLE_OPTIONS.find((r) => r.value === value);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((p) => !p)}
+        className={`${inputCls} flex items-center justify-between`}
+      >
+        <span className={selected ? "text-gray-800" : "text-gray-400"}>
+          {selected ? selected.label : "Select a role"}
+        </span>
+        <ChevronDown
+          size={15}
+          className={`text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+          {ROLE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                onChange(opt.value);
+                setOpen(false);
+              }}
+              className={`w-full text-left px-4 py-2.5 text-sm transition flex items-center justify-between ${
+                value === opt.value
+                  ? "bg-indigo-50 text-indigo-700 font-semibold"
+                  : "text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              {opt.label}
+              {value === opt.value && (
+                <Check size={14} className="text-indigo-600" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ─── REPORTING TO SINGLE-SELECT ──────────────────────────────────────────── */
+const ReportingToDropdown = ({
+  value,
+  onChange,
+  allUsers = [],
+  currentUserId,
+}) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const options = allUsers.filter((u) => u.id !== currentUserId);
+  const selected = options.find((u) => u.id === value);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((p) => !p)}
+        className={`${inputCls} flex items-center justify-between min-h-[42px]`}
+      >
+        {selected ? (
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+              {selected.name?.[0] ?? "?"}
+            </div>
+            <span className="text-gray-800 font-medium">{selected.name}</span>
+            <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
+              {getRoleLabel(selected.role)}
+            </span>
+          </div>
+        ) : (
+          <span className="text-gray-400">Select reporting person</span>
+        )}
+        <ChevronDown
+          size={15}
+          className={`text-gray-400 transition-transform shrink-0 ml-2 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden max-h-52 flex flex-col">
+          {/* None option */}
+          <button
+            type="button"
+            onClick={() => {
+              onChange("");
+              setOpen(false);
+            }}
+            className={`w-full text-left px-4 py-2.5 text-sm border-b transition flex items-center gap-2 ${
+              !value
+                ? "bg-indigo-50 text-indigo-700 font-semibold"
+                : "text-gray-400 hover:bg-gray-50"
+            }`}
+          >
+            <span className="italic">None</span>
+            {!value && <Check size={13} className="ml-auto text-indigo-600" />}
+          </button>
+
+          <div className="overflow-y-auto flex-1">
+            {options.length === 0 ? (
+              <div className="px-4 py-3 text-sm text-gray-400 text-center">
+                No other users available
+              </div>
+            ) : (
+              options.map((user) => {
+                const isSelected = value === user.id;
+                return (
+                  <button
+                    key={user.id}
+                    type="button"
+                    onClick={() => {
+                      onChange(user.id);
+                      setOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-2.5 text-sm transition flex items-center justify-between gap-2 ${
+                      isSelected
+                        ? "bg-indigo-50 text-indigo-700"
+                        : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-[11px] font-bold shrink-0">
+                        {user.name?.[0] ?? "?"}
+                      </div>
+                      <span className="truncate font-medium">{user.name}</span>
+                      <span className="text-[10px] text-gray-400 shrink-0 bg-gray-100 px-1.5 py-0.5 rounded-full">
+                        {getRoleLabel(user.role)}
+                      </span>
+                    </div>
+                    {isSelected && (
+                      <Check size={14} className="text-indigo-600 shrink-0" />
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ─── SLIDE-IN PANEL ──────────────────────────────────────────────────────── */
+const UserPanel = ({ onClose, onSave, editMember, allUsers }) => {
   const isEdit = Boolean(editMember);
 
   const [form, setForm] = useState(
@@ -84,7 +280,9 @@ const UserPanel = ({ onClose, onSave, editMember }) => {
             : "",
           password: "",
           confirmPassword: "",
-          user_type: editMember.user_type || "INTERNAL", // NEW
+          user_type: editMember.user_type || "INTERNAL",
+          role: editMember.role || "",
+          reporting_person_id: editMember.reporting_person_id ?? "",
         }
       : INIT_FORM,
   );
@@ -100,6 +298,10 @@ const UserPanel = ({ onClose, onSave, editMember }) => {
 
     if (!form.name || !form.email || !form.phone) {
       setError("Name, email and phone are required.");
+      return;
+    }
+    if (!form.role) {
+      setError("Please select a role.");
       return;
     }
     if (!isEdit && !form.password) {
@@ -121,7 +323,9 @@ const UserPanel = ({ onClose, onSave, editMember }) => {
         const changes = {
           name: form.name,
           phone: form.phone,
-          user_type: form.user_type, // NEW
+          user_type: form.user_type,
+          role: form.role,
+          reporting_person_id: form.reporting_person_id || null,
         };
         if (form.password) changes.password = form.password;
         if (form.joined_at) changes.joined_at = form.joined_at;
@@ -134,22 +338,27 @@ const UserPanel = ({ onClose, onSave, editMember }) => {
           ...shapeMember(res.data.data),
           assigned_leads: editMember.assigned_leads,
           completed_visits: editMember.completed_visits,
+          reporting_person_id: form.reporting_person_id || null,
         });
       } else {
         const formData = new FormData();
         formData.append("email", form.email);
         formData.append("password", form.password);
-        formData.append("role", "DEALER_USER");
+        formData.append("role", form.role);
         formData.append("name", form.name);
         formData.append("phone", form.phone);
         formData.append("dealer_id", getDealerId());
-        formData.append("user_type", form.user_type); // NEW
+        formData.append("user_type", form.user_type);
         if (form.joined_at) formData.append("joined_at", form.joined_at);
+        if (form.reporting_person_id)
+          formData.append("reporting_person_id", form.reporting_person_id);
 
         const res = await axios.post(`${BASE_URL}/auth/create-user`, formData);
-        onSave(shapeMember(res.data.data));
+        onSave({
+          ...shapeMember(res.data.data),
+          reporting_person_id: form.reporting_person_id || null,
+        });
       }
-
       onClose();
     } catch (err) {
       setError(
@@ -195,7 +404,7 @@ const UserPanel = ({ onClose, onSave, editMember }) => {
             </div>
           )}
 
-          {/* NEW: User Type Selection */}
+          {/* User Type Selection */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-2">
               User Type <span className="text-red-500">*</span>
@@ -241,6 +450,29 @@ const UserPanel = ({ onClose, onSave, editMember }) => {
             </p>
           </div>
 
+          {/* Role Dropdown */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+              Role <span className="text-red-500">*</span>
+            </label>
+            <RoleDropdown value={form.role} onChange={(v) => set("role", v)} />
+            {form.role && (
+              <p className="text-[11px] text-gray-400 mt-1.5">
+                {form.role === "MANAGER" &&
+                  "Managers oversee team operations and performance."}
+                {form.role === "SALES_USER" &&
+                  "Sales Users handle leads and client interactions."}
+                {form.role === "CALLER" &&
+                  "Callers are responsible for outbound lead calling."}
+                {form.role === "TEAM_LEAD" &&
+                  "Team Leads guide and support their team members."}
+                {form.role === "RM" &&
+                  "Relationship Managers manage key client relationships."}
+              </p>
+            )}
+          </div>
+
+          {/* Full Name */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">
               Full Name <span className="text-red-500">*</span>
@@ -253,6 +485,7 @@ const UserPanel = ({ onClose, onSave, editMember }) => {
             />
           </div>
 
+          {/* Work Email */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">
               Work Email <span className="text-red-500">*</span>
@@ -278,6 +511,7 @@ const UserPanel = ({ onClose, onSave, editMember }) => {
             </div>
           </div>
 
+          {/* Phone */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">
               Phone Number <span className="text-red-500">*</span>
@@ -296,6 +530,7 @@ const UserPanel = ({ onClose, onSave, editMember }) => {
             </div>
           </div>
 
+          {/* Date of Joining */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">
               Date of Joining{" "}
@@ -314,6 +549,7 @@ const UserPanel = ({ onClose, onSave, editMember }) => {
             />
           </div>
 
+          {/* Password */}
           <div className="border-t pt-4 space-y-4">
             <p className="text-xs text-gray-400 font-medium">
               {isEdit
@@ -359,6 +595,23 @@ const UserPanel = ({ onClose, onSave, editMember }) => {
             </div>
           </div>
 
+          {/* Reporting To */}
+          <div className="border-t pt-4">
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+              Reporting To{" "}
+              <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <ReportingToDropdown
+              value={form.reporting_person_id}
+              onChange={(v) => set("reporting_person_id", v)}
+              allUsers={allUsers}
+              currentUserId={editMember?.id}
+            />
+            <p className="text-[11px] text-gray-400 mt-1.5">
+              Select the manager, team lead, or supervisor this user reports to.
+            </p>
+          </div>
+
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-700 text-sm font-medium">
               {error}
@@ -395,12 +648,16 @@ const UserPanel = ({ onClose, onSave, editMember }) => {
           </button>
         </div>
       </div>
-      <div className="flex-1 bg-black/40" onClick={onClose} />
+      <div
+        className="flex-1"
+        style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
+        onClick={onClose}
+      />
     </div>
   );
 };
 
-/* ─── MEMBER CARD ────────────────────────────────────────────────────────────── */
+/* ─── MEMBER CARD ─────────────────────────────────────────────────────────── */
 const MemberCard = ({ member, onToggleStatus, onEdit }) => {
   const isActive = member.is_active;
 
@@ -415,11 +672,8 @@ const MemberCard = ({ member, onToggleStatus, onEdit }) => {
           </div>
           <div>
             <div className="font-bold text-gray-900">{member.name}</div>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-xs text-gray-400 capitalize">
-                {member.role?.replace("_", " ")}
-              </span>
-              {/* NEW: Show User Type Badge */}
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              <RoleBadge role={member.role} />
               <UserTypeBadge type={member.user_type} />
             </div>
           </div>
@@ -445,19 +699,16 @@ const MemberCard = ({ member, onToggleStatus, onEdit }) => {
             label: "Leads",
             value: member.assigned_leads,
             color: "text-blue-600",
-            icon: Users,
           },
           {
             label: "Visits",
             value: member.completed_visits,
             color: "text-purple-600",
-            icon: Calendar,
           },
           {
             label: "Closed",
             value: member.closed_deals,
             color: "text-emerald-600",
-            icon: TrendingUp,
           },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-gray-50 rounded-xl p-2.5 text-center">
@@ -504,7 +755,7 @@ const MemberCard = ({ member, onToggleStatus, onEdit }) => {
   );
 };
 
-/* ─── MAIN COMPONENT ─────────────────────────────────────────────────────────── */
+/* ─── MAIN COMPONENT ──────────────────────────────────────────────────────── */
 const ManageSalesTeam = () => {
   const [team, setTeam] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -512,7 +763,8 @@ const ManageSalesTeam = () => {
   const [panelOpen, setPanelOpen] = useState(false);
   const [editMember, setEditMember] = useState(null);
   const [filterStatus, setFilterStatus] = useState("ALL");
-  const [filterUserType, setFilterUserType] = useState("ALL"); // NEW
+  const [filterUserType, setFilterUserType] = useState("ALL");
+  const [filterRole, setFilterRole] = useState("ALL");
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -520,11 +772,9 @@ const ManageSalesTeam = () => {
       try {
         const [usersRes, leadsRes, visitsRes] = await Promise.allSettled([
           axios.get(`${BASE_URL}/auth/users`, {
-            params: { role: "DEALER_USER", dealer_id: dealerId },
-          }),
-          axios.get(`${BASE_URL}/leads/`, {
             params: { dealer_id: dealerId },
           }),
+          axios.get(`${BASE_URL}/leads/`, { params: { dealer_id: dealerId } }),
           axios.get(`${BASE_URL}/admin/visits`, {
             params: { dealer_id: dealerId, limit: 500 },
           }),
@@ -535,19 +785,16 @@ const ManageSalesTeam = () => {
 
         if (leadsRes.status === "fulfilled") {
           for (const lead of leadsRes.value.data?.data ?? []) {
-            if (lead.assigned_to) {
+            if (lead.assigned_to)
               leadsMap[lead.assigned_to] =
                 (leadsMap[lead.assigned_to] ?? 0) + 1;
-            }
           }
         }
-
         if (visitsRes.status === "fulfilled") {
           for (const visit of visitsRes.value.data?.data ?? []) {
-            if (visit.assigned_to) {
+            if (visit.assigned_to)
               visitsMap[visit.assigned_to] =
                 (visitsMap[visit.assigned_to] ?? 0) + 1;
-            }
           }
         }
 
@@ -555,7 +802,6 @@ const ManageSalesTeam = () => {
           usersRes.status === "fulfilled"
             ? (usersRes.value.data?.data ?? [])
             : [];
-
         setTeam(rawUsers.map((u) => shapeMember(u, leadsMap, visitsMap)));
       } catch {
         setError("Failed to load team members. Please try again.");
@@ -605,20 +851,23 @@ const ManageSalesTeam = () => {
     }
   };
 
-  // NEW: Apply both filters
   const displayed = team.filter((m) => {
     const statusMatch = filterStatus === "ALL" || m.status === filterStatus;
     const typeMatch =
       filterUserType === "ALL" || m.user_type === filterUserType;
-    return statusMatch && typeMatch;
+    const roleMatch = filterRole === "ALL" || m.role === filterRole;
+    return statusMatch && typeMatch && roleMatch;
   });
 
   const activeCount = team.filter((m) => m.is_active).length;
   const inactiveCount = team.filter((m) => !m.is_active).length;
-  const internalCount = team.filter((m) => m.user_type === "INTERNAL").length; // NEW
-  const externalCount = team.filter((m) => m.user_type === "EXTERNAL").length; // NEW
+  const internalCount = team.filter((m) => m.user_type === "INTERNAL").length;
+  const externalCount = team.filter((m) => m.user_type === "EXTERNAL").length;
   const totalLeads = team.reduce((s, m) => s + (m.assigned_leads ?? 0), 0);
   const totalClosed = team.reduce((s, m) => s + (m.closed_deals ?? 0), 0);
+
+  // Unique roles present in team for filter
+  const presentRoles = [...new Set(team.map((m) => m.role).filter(Boolean))];
 
   return (
     <div className="p-6 space-y-5">
@@ -641,7 +890,7 @@ const ManageSalesTeam = () => {
         </div>
       )}
 
-      {/* ── Summary cards ─────────────────────────────────────────── */}
+      {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         {[
           {
@@ -685,11 +934,11 @@ const ManageSalesTeam = () => {
         ))}
       </div>
 
-      {/* ── Filters ───────────────────────────────────────────────── */}
+      {/* Filters */}
       <div className="flex flex-wrap gap-4">
         {/* Status Filter */}
-        <div className="flex gap-2">
-          <span className="text-xs font-semibold text-gray-500 self-center mr-1">
+        <div className="flex gap-2 items-center">
+          <span className="text-xs font-semibold text-gray-500 mr-1">
             Status:
           </span>
           {[
@@ -708,7 +957,9 @@ const ManageSalesTeam = () => {
             >
               {label}
               <span
-                className={`${filterStatus === value ? "text-white/75" : "text-gray-400"}`}
+                className={
+                  filterStatus === value ? "text-white/75" : "text-gray-400"
+                }
               >
                 ({count})
               </span>
@@ -716,9 +967,9 @@ const ManageSalesTeam = () => {
           ))}
         </div>
 
-        {/* NEW: User Type Filter */}
-        <div className="flex gap-2">
-          <span className="text-xs font-semibold text-gray-500 self-center mr-1">
+        {/* User Type Filter */}
+        <div className="flex gap-2 items-center">
+          <span className="text-xs font-semibold text-gray-500 mr-1">
             Type:
           </span>
           {[
@@ -752,7 +1003,9 @@ const ManageSalesTeam = () => {
               {Icon && <Icon size={12} />}
               {label}
               <span
-                className={`${filterUserType === value ? "text-white/75" : "text-gray-400"}`}
+                className={
+                  filterUserType === value ? "text-white/75" : "text-gray-400"
+                }
               >
                 ({count})
               </span>
@@ -761,7 +1014,7 @@ const ManageSalesTeam = () => {
         </div>
       </div>
 
-      {/* ── Team grid ─────────────────────────────────────────────── */}
+      {/* Team grid */}
       {loading ? (
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
           {[...Array(3)].map((_, i) => (
@@ -810,6 +1063,7 @@ const ManageSalesTeam = () => {
           editMember={editMember}
           onClose={() => setPanelOpen(false)}
           onSave={handleSave}
+          allUsers={team}
         />
       )}
     </div>
