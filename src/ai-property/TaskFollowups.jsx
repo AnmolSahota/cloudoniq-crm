@@ -1482,7 +1482,7 @@ const TaskFollowups = () => {
 
                       {/* Actions */}
                       <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition">
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => openEdit(task)}
                             className="flex items-center gap-1 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-2 py-1 rounded-lg transition whitespace-nowrap"
