@@ -1,6 +1,7 @@
 // src/pages/dealer/SiteVisits.jsx
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import axios from "axios";
 import {
   Calendar,
@@ -19,21 +20,24 @@ import {
   MapPin,
   Zap,
   Pencil,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { BASE_URL } from "./config";
 
 /* ─── AUTH HELPERS ───────────────────────────────────────────────────────── */
 const getAuthUser = () => JSON.parse(localStorage.getItem("auth_user")) || {};
-
-// DEALER      → their own id IS the dealer_id
-// DEALER_USER → belongs to a dealer, use dealer_id field
 const getDealerId = () => {
   const authUser = getAuthUser();
   return authUser.role === "DEALER_USER"
     ? authUser.dealer_id || ""
     : authUser.id || "";
 };
-
 const isDealerUser = () => getAuthUser().role === "DEALER_USER";
 
 /* ─── CONSTANTS ──────────────────────────────────────────────────────────── */
@@ -47,19 +51,47 @@ const VISIT_STATUSES = [
 ];
 
 const STATUS_STYLES = {
-  Scheduled: { bg: "bg-blue-100", text: "text-blue-700", icon: Clock },
+  Scheduled: {
+    bg: "bg-blue-100",
+    text: "text-blue-700",
+    icon: Clock,
+    pill: "bg-blue-50 text-blue-700 border border-blue-200",
+    dot: "bg-blue-500",
+  },
   Completed: {
     bg: "bg-emerald-100",
     text: "text-emerald-700",
     icon: CheckCircle,
+    pill: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+    dot: "bg-emerald-500",
   },
-  Cancelled: { bg: "bg-gray-100", text: "text-gray-600", icon: XCircle },
-  "No Show": { bg: "bg-red-100", text: "text-red-700", icon: AlertTriangle },
-  Interested: { bg: "bg-teal-100", text: "text-teal-700", icon: CheckCircle },
+  Cancelled: {
+    bg: "bg-gray-100",
+    text: "text-gray-600",
+    icon: XCircle,
+    pill: "bg-gray-100 text-gray-600 border border-gray-200",
+    dot: "bg-gray-400",
+  },
+  "No Show": {
+    bg: "bg-red-100",
+    text: "text-red-700",
+    icon: AlertTriangle,
+    pill: "bg-red-50 text-red-700 border border-red-200",
+    dot: "bg-red-500",
+  },
+  Interested: {
+    bg: "bg-teal-100",
+    text: "text-teal-700",
+    icon: CheckCircle,
+    pill: "bg-teal-50 text-teal-700 border border-teal-200",
+    dot: "bg-teal-500",
+  },
   "Not Interested": {
     bg: "bg-orange-100",
     text: "text-orange-700",
     icon: XCircle,
+    pill: "bg-orange-50 text-orange-700 border border-orange-200",
+    dot: "bg-orange-400",
   },
 };
 
@@ -91,32 +123,117 @@ const initials = (name) =>
     .slice(0, 2)
     .toUpperCase() || "?";
 
-// ── Helpers: read enriched contact data from visit ───────────────────────────
 const getVisitName = (v) =>
   v.lead?.contact_name || v.contact_name || v.lead_name || v.name || "—";
-
 const getVisitPhone = (v) =>
   v.lead?.contact_phone || v.contact_phone || v.lead_phone || v.phone || null;
-
 const getVisitProp = (v) =>
   v.lead?.property_name || v.property_name || v.property || null;
-
 const getVisitPropLocation = (v) =>
   v.lead?.property_location || v.property_location || v.location || null;
 
-/* ─── STATUS BADGE ───────────────────────────────────────────────────────── */
-const VisitStatusBadge = ({ status }) => {
-  const s = STATUS_STYLES[status] ?? {
-    bg: "bg-gray-100",
-    text: "text-gray-600",
-  };
+/* ─── STATUS BUTTON (portal dropdown — escapes table overflow clipping) ──── */
+const StatusButton = ({ status, onChange, disabled }) => {
+  const [showMenu, setShowMenu] = useState(false);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const btnRef = useRef();
+  const menuRef = useRef();
+  const s = STATUS_STYLES[status] ?? STATUS_STYLES.Scheduled;
   const Icon = s.icon ?? Clock;
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handler = (e) => {
+      if (
+        !btnRef.current?.contains(e.target) &&
+        !menuRef.current?.contains(e.target)
+      )
+        setShowMenu(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showMenu]);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handler = () => setShowMenu(false);
+    window.addEventListener("scroll", handler, true);
+    return () => window.removeEventListener("scroll", handler, true);
+  }, [showMenu]);
+
+  const handleOpen = (e) => {
+    e.stopPropagation();
+    if (disabled) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    const menuHeight = VISIT_STATUSES.length * 40;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top =
+      spaceBelow < menuHeight + 8 ? rect.top - menuHeight - 4 : rect.bottom + 4;
+    setMenuPos({ top, left: rect.left });
+    setShowMenu((o) => !o);
+  };
+
+  const menu = showMenu
+    ? createPortal(
+        <div
+          ref={menuRef}
+          style={{ top: menuPos.top, left: menuPos.left, position: "fixed" }}
+          className="z-[9999] bg-white rounded-xl border border-gray-100 shadow-2xl overflow-hidden min-w-[168px]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {VISIT_STATUSES.map((key) => {
+            const cfg = STATUS_STYLES[key] ?? {};
+            const SIcon = cfg.icon ?? Clock;
+            const isActive = key === status;
+            return (
+              <button
+                key={key}
+                onClick={() => {
+                  onChange(key);
+                  setShowMenu(false);
+                }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-semibold transition hover:bg-gray-50 ${isActive ? "bg-gray-50" : ""}`}
+              >
+                <div className={`w-2 h-2 rounded-full shrink-0 ${cfg.dot}`} />
+                <SIcon size={12} className={cfg.text} />
+                <span className={isActive ? cfg.text : "text-gray-600"}>
+                  {key}
+                </span>
+                {isActive && (
+                  <CheckCircle
+                    size={11}
+                    className="ml-auto text-indigo-500 shrink-0"
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>,
+        document.body,
+      )
+    : null;
+
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${s.bg} ${s.text}`}
-    >
-      <Icon size={12} /> {status}
-    </span>
+    <>
+      <button
+        ref={btnRef}
+        disabled={disabled}
+        onClick={handleOpen}
+        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all whitespace-nowrap ${s.pill} hover:opacity-80 disabled:opacity-50`}
+      >
+        {disabled ? (
+          <span className="w-3 h-3 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+        ) : (
+          <Icon size={11} />
+        )}
+        {status}
+        <ChevronDown
+          size={9}
+          className={`transition-transform ${showMenu ? "rotate-180" : ""}`}
+        />
+      </button>
+      {menu}
+    </>
   );
 };
 
@@ -172,7 +289,6 @@ const SearchableDropdown = ({
           className={`text-gray-400 transition-transform shrink-0 ${open ? "rotate-180" : ""}`}
         />
       </button>
-
       {open && (
         <div className="absolute top-full mt-1.5 left-0 right-0 z-50 bg-white rounded-xl border border-gray-100 shadow-xl overflow-hidden">
           <div className="p-2 border-b border-gray-50">
@@ -233,7 +349,6 @@ const SearchableDropdown = ({
 const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
   const authUser = getAuthUser();
   const isDealer_User = authUser.role === "DEALER_USER";
-
   const [properties, setProperties] = useState([]);
   const [propsLoading, setPropsLoading] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -273,13 +388,11 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
       ? { id: visit.assigned_to, name: visit.assigned_name }
       : null,
   });
-
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
   useEffect(() => {
     const load = async () => {
       try {
-        // ✅ Always use getDealerId() — returns dealer's ID for both roles
         const res = await axios.get(`${BASE_URL}/properties/list`, {
           params: { dealer_id: getDealerId() },
         });
@@ -311,7 +424,7 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
     setLoading(true);
     try {
       const payload = {
-        dealer_id: getDealerId(), // ✅ correct dealer_id for both roles
+        dealer_id: getDealerId(),
         lead_id: form.lead.id,
         property_id: form.property?.id || null,
         property_name: form.property?.name || null,
@@ -319,7 +432,6 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
         time: form.time,
         notes: form.notes,
         status: form.status,
-        // ✅ DEALER_USER cannot change assigned_to — keep original
         assigned_to: isDealer_User
           ? visit.assigned_to
           : form.assignedTo?.id || null,
@@ -343,7 +455,6 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
   return (
     <div className="fixed inset-0 z-50 flex justify-start">
       <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col">
-        {/* Header */}
         <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-5 text-white">
           <div className="flex items-start justify-between">
             <div>
@@ -364,8 +475,6 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
             </button>
           </div>
         </div>
-
-        {/* Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
           {/* Lead */}
           <div>
@@ -409,16 +518,10 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
                       {item.stage ? ` · ${item.stage}` : ""}
                     </div>
                   </div>
-                  {item.property_name && (
-                    <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full truncate max-w-[80px]">
-                      {item.property_name}
-                    </span>
-                  )}
                 </div>
               )}
             />
           </div>
-
           {/* Property */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">
@@ -478,7 +581,6 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
               />
             )}
           </div>
-
           {/* Date & Time */}
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -516,7 +618,6 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
               </div>
             </div>
           </div>
-
           {/* Status */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">
@@ -528,19 +629,14 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
                   key={s}
                   type="button"
                   onClick={() => set("status", s)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition ${
-                    form.status === s
-                      ? "bg-indigo-600 text-white border-indigo-600"
-                      : "text-gray-600 border-gray-200 hover:bg-gray-50"
-                  }`}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition ${form.status === s ? "bg-indigo-600 text-white border-indigo-600" : "text-gray-600 border-gray-200 hover:bg-gray-50"}`}
                 >
                   {s}
                 </button>
               ))}
             </div>
           </div>
-
-          {/* ✅ Assign salesperson — hidden for DEALER_USER */}
+          {/* Assign — hidden for DEALER_USER */}
           {!isDealer_User && (
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">
@@ -549,7 +645,6 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
               <SearchableDropdown
                 label="Sales person"
                 placeholder="Assign to a sales person..."
-                // ✅ Fetch users scoped to dealer — getDealerId() handles both roles
                 items={users.filter((u) => u.is_active)}
                 value={form.assignedTo}
                 onChange={(v) => set("assignedTo", v)}
@@ -580,7 +675,6 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
               />
             </div>
           )}
-
           {/* Notes */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">
@@ -594,15 +688,12 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
               className={`${inputCls} resize-none`}
             />
           </div>
-
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-700 text-sm font-medium">
               {error}
             </div>
           )}
         </div>
-
-        {/* Footer */}
         <div className="px-6 py-4 border-t flex gap-3">
           <button
             type="button"
@@ -636,8 +727,6 @@ const EditVisitPanel = ({ visit, onClose, onSave, leads, users }) => {
 const VisitPanel = ({ onClose, onSave, leads, users }) => {
   const authUser = getAuthUser();
   const isDealer_User = authUser.role === "DEALER_USER";
-
-  // ✅ DEALER_USER skips the Assign step entirely
   const STEPS = isDealer_User
     ? [
         { num: 1, label: "Lead" },
@@ -650,9 +739,7 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
         { num: 3, label: "Schedule" },
         { num: 4, label: "Assign" },
       ];
-
   const MAX_STEP = isDealer_User ? 3 : 4;
-
   const [step, setStep] = useState(1);
   const [properties, setProperties] = useState([]);
   const [propsLoading, setPropsLoading] = useState(false);
@@ -680,7 +767,6 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
     const load = async () => {
       setPropsLoading(true);
       try {
-        // ✅ getDealerId() now returns the correct dealer ID for both roles
         const res = await axios.get(`${BASE_URL}/properties/list`, {
           params: { dealer_id: getDealerId() },
         });
@@ -719,14 +805,13 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
     setLoading(true);
     try {
       const payload = {
-        dealer_id: getDealerId(), // ✅ correct dealer_id for both roles
+        dealer_id: getDealerId(),
         lead_id: form.lead.id,
         property_id: form.property.id,
         property_name: form.property.name,
         date: form.date,
         time: form.time,
         notes: form.notes,
-        // ✅ DEALER_USER auto-assigns to themselves
         assigned_to: isDealer_User ? authUser.id : form.assignedTo?.id || null,
         assigned_name: isDealer_User
           ? authUser.name
@@ -750,7 +835,6 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
   return (
     <div className="fixed inset-0 z-50 flex justify-start">
       <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col">
-        {/* Header + stepper */}
         <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-5 text-white">
           <div className="flex items-start justify-between mb-5">
             <div>
@@ -772,7 +856,6 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
               <X size={22} />
             </button>
           </div>
-
           <div className="flex items-center">
             {STEPS.map((s, i) => (
               <div key={s.num} className="flex items-center flex-1">
@@ -780,13 +863,7 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
                   <button
                     type="button"
                     onClick={() => (step > s.num ? setStep(s.num) : null)}
-                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all border-2 ${
-                      step > s.num
-                        ? "bg-white text-indigo-600 border-white cursor-pointer"
-                        : step === s.num
-                          ? "bg-white/20 text-white border-white"
-                          : "bg-transparent text-white/40 border-white/25"
-                    }`}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all border-2 ${step > s.num ? "bg-white text-indigo-600 border-white cursor-pointer" : step === s.num ? "bg-white/20 text-white border-white" : "bg-transparent text-white/40 border-white/25"}`}
                   >
                     {step > s.num ? <CheckCircle size={13} /> : s.num}
                   </button>
@@ -806,7 +883,6 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
           </div>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {/* STEP 1 — Lead */}
           {step === 1 && (
@@ -883,7 +959,6 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
               )}
             </div>
           )}
-
           {/* STEP 2 — Property */}
           {step === 2 && (
             <div className="space-y-4">
@@ -906,9 +981,6 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
                     />
                     <p className="text-xs text-gray-400 font-medium">
                       No properties found
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      Add properties from Manage Properties first
                     </p>
                   </div>
                 ) : (
@@ -991,7 +1063,6 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
               </div>
             </div>
           )}
-
           {/* STEP 3 — Date & Time */}
           {step === 3 && (
             <div className="space-y-4">
@@ -1037,8 +1108,7 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
               </div>
             </div>
           )}
-
-          {/* STEP 4 — Assign & Review — ✅ hidden for DEALER_USER */}
+          {/* STEP 4 — Assign & Review */}
           {step === 4 && !isDealer_User && (
             <div className="space-y-4">
               <div>
@@ -1049,7 +1119,6 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
                 <SearchableDropdown
                   label="Sales person"
                   placeholder="Assign to a sales person..."
-                  // ✅ users already fetched with correct dealer_id from main component
                   items={users.filter((u) => u.is_active)}
                   value={form.assignedTo}
                   onChange={(v) => set("assignedTo", v)}
@@ -1130,15 +1199,12 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
               </div>
             </div>
           )}
-
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-700 text-sm font-medium">
               {error}
             </div>
           )}
         </div>
-
-        {/* Footer */}
         <div className="px-6 py-4 border-t flex gap-3">
           <button
             type="button"
@@ -1148,7 +1214,6 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
           >
             {step > 1 ? "← Back" : "Cancel"}
           </button>
-          {/* ✅ Use MAX_STEP to control when Continue vs Schedule Visit shows */}
           {step < MAX_STEP ? (
             <button
               type="button"
@@ -1180,93 +1245,16 @@ const VisitPanel = ({ onClose, onSave, leads, users }) => {
   );
 };
 
-/* ─── VISIT CARD ─────────────────────────────────────────────────────────── */
-const VisitCard = ({ visit, onEdit }) => {
-  const name = getVisitName(visit);
-  const phone = getVisitPhone(visit);
-  const prop = getVisitProp(visit);
-  const propLocation = getVisitPropLocation(visit);
-
-  return (
-    <div className="bg-white rounded-2xl border shadow-sm p-5 space-y-4 hover:shadow-md transition group">
-      {/* Top row */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="font-bold text-gray-900 truncate">{name}</div>
-
-          <div className="mt-1 flex items-center gap-1.5 min-w-0">
-            <Building2 size={11} className="text-gray-400 shrink-0" />
-            <span className="text-xs text-gray-500 truncate min-w-0">
-              {prop || (
-                <span className="italic text-gray-300">
-                  No property assigned
-                </span>
-              )}
-            </span>
-          </div>
-
-          {propLocation && (
-            <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
-              <MapPin size={10} className="shrink-0" /> {propLocation}
-            </div>
-          )}
-
-          {phone && (
-            <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
-              <Phone size={11} className="shrink-0" /> {phone}
-            </div>
-          )}
-        </div>
-        <VisitStatusBadge status={visit.status} />
-      </div>
-
-      {/* Date / Time */}
-      <div className="flex items-center gap-4 text-sm text-gray-600">
-        <span className="flex items-center gap-1.5">
-          <Calendar size={14} className="text-indigo-500 shrink-0" />
-          {fmtDate(visit.date)}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <Clock size={14} className="text-indigo-500 shrink-0" />
-          {visit.time}
-        </span>
-      </div>
-
-      {/* Notes */}
-      {visit.notes && (
-        <p className="text-xs text-gray-500 bg-gray-50 rounded-xl px-3 py-2 leading-relaxed">
-          {visit.notes}
-        </p>
-      )}
-
-      {/* Salesperson */}
-      <div>
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-          Assigned Sales Person
-        </div>
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-gray-50">
-          <User
-            size={14}
-            className={
-              visit.assigned_name ? "text-indigo-500" : "text-gray-400"
-            }
-          />
-          <span
-            className={`text-sm ${visit.assigned_name ? "font-semibold text-gray-800" : "text-gray-400"}`}
-          >
-            {visit.assigned_name || "Unassigned"}
-          </span>
-        </div>
-      </div>
-
-      {/* Edit Button */}
-      <button
-        onClick={() => onEdit(visit)}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-90 transition shadow-sm"
-      >
-        <Pencil size={14} /> Edit Visit
-      </button>
-    </div>
+/* ─── SORT ICON ─────────────────────────────────────────────────────────────── */
+const SortIcon = ({ col, sortCol, sortDir }) => {
+  if (sortCol !== col)
+    return (
+      <ArrowUpDown size={12} className="text-gray-300 ml-1 inline-block" />
+    );
+  return sortDir === "asc" ? (
+    <ArrowUp size={12} className="text-indigo-500 ml-1 inline-block" />
+  ) : (
+    <ArrowDown size={12} className="text-indigo-500 ml-1 inline-block" />
   );
 };
 
@@ -1279,7 +1267,63 @@ const SiteVisits = () => {
   const [filter, setFilter] = useState("All");
   const [panelOpen, setPanelOpen] = useState(false);
   const [editingVisit, setEditingVisit] = useState(null);
+  const [updatingId, setUpdatingId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  // Sorting
+  const [sortCol, setSortCol] = useState("date");
+  const [sortDir, setSortDir] = useState("desc");
+
+  useEffect(() => {
+    const authUser = getAuthUser();
+    const fetchVisits = async () => {
+      try {
+        const params = {};
+        if (authUser.role === "DEALER") params.dealer_id = getDealerId();
+        else if (authUser.role === "DEALER_USER")
+          params.assigned_to = authUser.id;
+        const res = await axios.get(`${BASE_URL}/admin/visits`, { params });
+        setVisits(
+          (res.data.data || []).map((v) => ({
+            ...v,
+            id: v.booking_id || v.id,
+          })),
+        );
+      } catch (err) {
+        console.error("Failed to fetch visits:", err);
+      }
+    };
+    const fetchLeads = async () => {
+      try {
+        const res = await axios.get(`${BASE_URL}/leads/`, {
+          params: { dealer_id: getDealerId() },
+        });
+        setLeads(res.data.data || []);
+      } catch {}
+    };
+    const fetchUsers = async () => {
+      try {
+        const res = await axios.get(`${BASE_URL}/auth/dealer-users`, {
+          params: { dealer_id: getDealerId() },
+        });
+        setUsers(res.data.data || []);
+      } catch {}
+    };
+    Promise.all([fetchVisits(), fetchLeads(), fetchUsers()]).finally(() =>
+      setLoading(false),
+    );
+  }, []);
+
+  // Reset page on filter/search/rows change
+  useEffect(() => {
+    setPage(1);
+  }, [filter, searchQuery, rowsPerPage]);
+
+  const handleSave = (v) => setVisits((p) => [v, ...p]);
   const handleEditSave = (updated) =>
     setVisits((prev) =>
       prev.map((v) =>
@@ -1289,74 +1333,113 @@ const SiteVisits = () => {
       ),
     );
 
-  useEffect(() => {
-    const authUser = getAuthUser();
-
-    const fetchVisits = async () => {
-      try {
-        const params = {};
-        if (authUser.role === "DEALER") {
-          // DEALER sees all visits under their dealer_id
-          params.dealer_id = getDealerId();
-        } else if (authUser.role === "DEALER_USER") {
-          // DEALER_USER only sees visits assigned to them
-          params.assigned_to = authUser.id;
-        }
-        const res = await axios.get(`${BASE_URL}/admin/visits`, { params });
-        const data = (res.data.data || []).map((v) => ({
-          ...v,
-          id: v.booking_id || v.id,
-        }));
-        setVisits(data);
-      } catch (err) {
-        console.error("Failed to fetch visits:", err);
-      }
-    };
-
-    const fetchLeads = async () => {
-      try {
-        // ✅ getDealerId() returns correct dealer ID for both roles
-        const res = await axios.get(`${BASE_URL}/leads/`, {
-          params: { dealer_id: getDealerId() },
-        });
-        setLeads(res.data.data || []);
-      } catch {}
-    };
-
-    const fetchUsers = async () => {
-      try {
-        // ✅ getDealerId() returns correct dealer ID for both roles
-        const res = await axios.get(`${BASE_URL}/auth/dealer-users`, {
-          params: { dealer_id: getDealerId() },
-        });
-        setUsers(res.data.data || []);
-      } catch {}
-    };
-
-    Promise.all([fetchVisits(), fetchLeads(), fetchUsers()]).finally(() =>
-      setLoading(false),
+  const handleStatusChange = async (visit, newStatus) => {
+    setUpdatingId(visit.id);
+    setVisits((prev) =>
+      prev.map((v) => (v.id === visit.id ? { ...v, status: newStatus } : v)),
     );
-  }, []);
+    try {
+      await axios.patch(`${BASE_URL}/admin/visits/${visit.id}`, {
+        dealer_id: getDealerId(),
+        status: newStatus,
+      });
+    } catch {
+      setVisits((prev) =>
+        prev.map((v) =>
+          v.id === visit.id ? { ...v, status: visit.status } : v,
+        ),
+      );
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
-  const handleSave = (v) => setVisits((p) => [v, ...p]);
-
-  const filtered =
-    filter === "All" ? visits : visits.filter((v) => v.status === filter);
-
-  const counts = {};
-  VISIT_STATUSES.forEach((s) => {
-    counts[s] = visits.filter((v) => v.status === s).length;
-  });
-
-  // ✅ Only show unassigned warning for DEALER role
   const authUser = getAuthUser();
   const unassignedCount =
     authUser.role === "DEALER"
       ? visits.filter((v) => !v.assigned_name).length
       : 0;
 
+  const counts = {};
+  VISIT_STATUSES.forEach((s) => {
+    counts[s] = visits.filter((v) => v.status === s).length;
+  });
+
+  // Filter by tab
+  let filtered =
+    filter === "All" ? visits : visits.filter((v) => v.status === filter);
+
+  // Search
+  if (searchQuery.trim()) {
+    const q = searchQuery.toLowerCase();
+    filtered = filtered.filter(
+      (v) =>
+        getVisitName(v).toLowerCase().includes(q) ||
+        getVisitPhone(v)?.toLowerCase().includes(q) ||
+        getVisitProp(v)?.toLowerCase().includes(q) ||
+        getVisitPropLocation(v)?.toLowerCase().includes(q) ||
+        v.assigned_name?.toLowerCase().includes(q) ||
+        v.status?.toLowerCase().includes(q) ||
+        v.notes?.toLowerCase().includes(q),
+    );
+  }
+
+  // Sort
+  const sorted = [...filtered].sort((a, b) => {
+    let aVal, bVal;
+    if (sortCol === "name") {
+      aVal = getVisitName(a);
+      bVal = getVisitName(b);
+    } else if (sortCol === "property") {
+      aVal = getVisitProp(a) || "";
+      bVal = getVisitProp(b) || "";
+    } else if (sortCol === "date") {
+      aVal = new Date(a.date).getTime();
+      bVal = new Date(b.date).getTime();
+    } else if (sortCol === "status") {
+      aVal = a.status || "";
+      bVal = b.status || "";
+    } else if (sortCol === "assigned") {
+      aVal = a.assigned_name || "";
+      bVal = b.assigned_name || "";
+    }
+    if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
+    if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  const totalRows = sorted.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / rowsPerPage));
+  const paginated = sorted.slice((page - 1) * rowsPerPage, page * rowsPerPage);
+
+  const handleSort = (col) => {
+    if (sortCol === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortCol(col);
+      setSortDir("asc");
+    }
+  };
+
+  const FILTERS = [
+    { key: "All", count: visits.length },
+    ...VISIT_STATUSES.filter((s) => counts[s] > 0).map((s) => ({
+      key: s,
+      count: counts[s],
+    })),
+  ];
+
+  const TH = ({ col, label, className = "" }) => (
+    <th
+      onClick={() => handleSort(col)}
+      className={`px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-indigo-600 whitespace-nowrap ${className}`}
+    >
+      {label}
+      <SortIcon col={col} sortCol={sortCol} sortDir={sortDir} />
+    </th>
+  );
+
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-6 space-y-5 min-h-screen bg-gray-50/60">
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
@@ -1375,7 +1458,7 @@ const SiteVisits = () => {
         </button>
       </div>
 
-      {/* Unassigned warning — only visible to DEALER */}
+      {/* Unassigned warning */}
       {unassignedCount > 0 && (
         <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
           <AlertTriangle size={17} className="text-amber-500 shrink-0" />
@@ -1386,71 +1469,344 @@ const SiteVisits = () => {
         </div>
       )}
 
-      {/* Filter pills */}
-      <div className="flex flex-wrap gap-2">
-        {[
-          ["All", visits.length],
-          ...Object.entries(counts).filter(([, c]) => c > 0),
-        ].map(([status, count]) => (
-          <button
-            key={status}
-            onClick={() => setFilter(status)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold border transition ${
-              filter === status
-                ? "bg-indigo-600 text-white border-indigo-600"
-                : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
-            }`}
-          >
-            {status}
-            <span
-              className={`text-xs ${filter === status ? "text-white/80" : "text-gray-400"}`}
-            >
-              ({count})
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {/* Cards */}
-      {loading ? (
-        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {[...Array(3)].map((_, i) => (
-            <div
-              key={i}
-              className="bg-white rounded-2xl border p-5 animate-pulse space-y-3"
-            >
-              <div className="flex justify-between">
-                <div className="space-y-1.5">
-                  <div className="h-4 bg-gray-200 rounded w-32" />
-                  <div className="h-3 bg-gray-100 rounded w-24" />
-                </div>
-                <div className="h-6 bg-gray-100 rounded-full w-20" />
-              </div>
-              <div className="h-3 bg-gray-100 rounded w-40" />
-              <div className="h-9 bg-gray-100 rounded-xl" />
-              <div className="h-9 bg-gray-100 rounded-xl" />
-            </div>
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-20">
-          <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
-            <Building2 size={28} className="text-gray-300" />
+      {/* Table card */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        {/* Toolbar */}
+        <div className="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3">
+          {/* Filter tabs */}
+          <div className="flex gap-1.5 flex-wrap">
+            {FILTERS.map(({ key, count }) => (
+              <button
+                key={key}
+                onClick={() => setFilter(key)}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+                  filter === key
+                    ? "bg-indigo-600 text-white border-indigo-600"
+                    : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                {key}
+                <span
+                  className={`${filter === key ? "text-white/75" : "text-gray-400"}`}
+                >
+                  ({count})
+                </span>
+              </button>
+            ))}
           </div>
-          <div className="font-bold text-gray-700 text-lg">No visits found</div>
-          <p className="text-sm text-gray-400 mt-1">
-            {filter === "All"
-              ? "Schedule your first site visit to get started"
-              : `No ${filter.toLowerCase()} visits`}
-          </p>
+
+          {/* Search */}
+          <div className="ml-auto relative">
+            <Search
+              size={13}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search visits..."
+              className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-gray-50 outline-none focus:border-indigo-300 focus:bg-white transition w-48"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
         </div>
-      ) : (
-        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map((v) => (
-            <VisitCard key={v.id} visit={v} onEdit={setEditingVisit} />
-          ))}
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[800px]">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 w-10">
+                  #
+                </th>
+                <TH col="name" label="Lead" />
+                <TH col="property" label="Property" />
+                <TH col="date" label="Date & Time" />
+                <TH col="status" label="Status" />
+                <TH col="assigned" label="Assigned To" />
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  Notes
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {loading ? (
+                [...Array(5)].map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    {[...Array(8)].map((_, j) => (
+                      <td key={j} className="px-4 py-3">
+                        <div className="h-3 bg-gray-100 rounded w-full" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : paginated.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-16 text-center">
+                    <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-3">
+                      <Building2 size={22} className="text-gray-300" />
+                    </div>
+                    <div className="font-bold text-gray-600">
+                      No visits found
+                    </div>
+                    <p className="text-sm text-gray-400 mt-1">
+                      {filter === "All" && !searchQuery
+                        ? "Schedule your first site visit to get started"
+                        : `No ${filter.toLowerCase()} visits matching your criteria`}
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                paginated.map((visit, idx) => {
+                  const name = getVisitName(visit);
+                  const phone = getVisitPhone(visit);
+                  const prop = getVisitProp(visit);
+                  const propLoc = getVisitPropLocation(visit);
+                  const rowNum = (page - 1) * rowsPerPage + idx + 1;
+                  const s =
+                    STATUS_STYLES[visit.status] ?? STATUS_STYLES.Scheduled;
+
+                  return (
+                    <tr
+                      key={visit.id}
+                      className={`group transition-colors ${visit.status === "Cancelled" ? "opacity-60 bg-white" : "bg-white hover:bg-indigo-50/20"}`}
+                    >
+                      {/* # */}
+                      <td className="px-4 py-3 text-xs text-gray-400 font-medium">
+                        {rowNum}
+                      </td>
+
+                      {/* Lead */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xs font-black shrink-0">
+                            {initials(name)}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-gray-900 truncate max-w-[140px]">
+                              {name}
+                            </div>
+                            {phone && (
+                              <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+                                <Phone size={9} />
+                                <span className="font-mono">{phone}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Property */}
+                      <td className="px-4 py-3">
+                        {prop ? (
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-gray-800 truncate max-w-[160px]">
+                              {prop}
+                            </div>
+                            {propLoc && (
+                              <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+                                <MapPin size={9} className="shrink-0" />
+                                <span className="truncate max-w-[140px]">
+                                  {propLoc}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-300 italic">
+                            No property
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Date & Time */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 text-sm text-gray-700 font-medium">
+                          <Calendar
+                            size={12}
+                            className="text-indigo-400 shrink-0"
+                          />
+                          {fmtDate(visit.date)}
+                        </div>
+                        {visit.time && (
+                          <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-0.5">
+                            <Clock
+                              size={11}
+                              className="text-indigo-300 shrink-0"
+                            />
+                            {visit.time}
+                          </div>
+                        )}
+                      </td>
+                      {/* Status */}
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold ${STATUS_STYLES[visit.status]?.pill ?? STATUS_STYLES.Scheduled.pill}`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${STATUS_STYLES[visit.status]?.dot ?? STATUS_STYLES.Scheduled.dot}`}
+                          />
+                          {visit.status}
+                        </span>
+                      </td>
+
+                      {/* Assigned To */}
+                      <td className="px-4 py-3">
+                        {visit.assigned_name ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shrink-0">
+                              <span className="text-[9px] font-black text-white">
+                                {initials(visit.assigned_name)}
+                              </span>
+                            </div>
+                            <span className="text-xs font-medium text-gray-700 truncate max-w-[90px]">
+                              {visit.assigned_name}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-300 italic">
+                            Unassigned
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Notes */}
+                      <td className="px-4 py-3">
+                        {visit.notes ? (
+                          <p
+                            className="text-xs text-gray-500 max-w-[160px] truncate"
+                            title={visit.notes}
+                          >
+                            {visit.notes}
+                          </p>
+                        ) : (
+                          <span className="text-xs text-gray-200">—</span>
+                        )}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {" "}
+                          <button
+                            onClick={() => setEditingVisit(visit)}
+                            className="flex items-center gap-1 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-2 py-1 rounded-lg transition whitespace-nowrap"
+                          >
+                            <Pencil size={11} /> Edit
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+
+        {/* Pagination footer */}
+        <div className="px-4 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3 bg-white">
+          {/* Rows per page */}
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <span>Rows per page:</span>
+            <select
+              value={rowsPerPage}
+              onChange={(e) => {
+                setRowsPerPage(Number(e.target.value));
+                setPage(1);
+              }}
+              className="border border-gray-200 rounded-lg px-2 py-1 text-sm bg-white outline-none focus:border-indigo-300 transition"
+            >
+              {[5, 10, 20, 50].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Range info */}
+          <div className="text-sm text-gray-500">
+            {totalRows === 0
+              ? "0 visits"
+              : `${(page - 1) * rowsPerPage + 1}–${Math.min(page * rowsPerPage, totalRows)} of ${totalRows} visit${totalRows !== 1 ? "s" : ""}`}
+          </div>
+
+          {/* Page controls */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(1)}
+              disabled={page === 1}
+              className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
+            >
+              <ChevronsLeft size={14} />
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            {(() => {
+              const pages = [];
+              let start = Math.max(1, page - 2);
+              let end = Math.min(totalPages, page + 2);
+              if (start > 1) {
+                pages.push(1);
+                if (start > 2) pages.push("...");
+              }
+              for (let i = start; i <= end; i++) pages.push(i);
+              if (end < totalPages) {
+                if (end < totalPages - 1) pages.push("...");
+                pages.push(totalPages);
+              }
+              return pages.map((p, i) =>
+                p === "..." ? (
+                  <span
+                    key={`e${i}`}
+                    className="w-8 h-8 flex items-center justify-center text-xs text-gray-400"
+                  >
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition ${page === p ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                  >
+                    {p}
+                  </button>
+                ),
+              );
+            })()}
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
+            >
+              <ChevronRight size={14} />
+            </button>
+            <button
+              onClick={() => setPage(totalPages)}
+              disabled={page === totalPages}
+              className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
+            >
+              <ChevronsRight size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
 
       {panelOpen && (
         <VisitPanel
