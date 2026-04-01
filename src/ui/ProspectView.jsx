@@ -6,17 +6,17 @@ const ProspectView = () => {
   const [selectedLeadId, setSelectedLeadId] = useState("");
   const [leads, setLeads] = useState([]);
 
-  // ✅ fetch ALL leads
+  // ✅ Fetch ALL leads
   useEffect(() => {
     fetch(`http://localhost:8081/api/leads`)
-      .then((res) => res.json())
-      .then((res) => {
-        console.log("Leads API Response:", res);
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("Leads API Response:", data);
 
-        if (Array.isArray(res)) {
-          setLeads(res);
-        } else if (Array.isArray(res.data)) {
-          setLeads(res.data);
+        if (Array.isArray(data)) {
+          setLeads(data);
+        } else if (Array.isArray(data.data)) {
+          setLeads(data.data);
         } else {
           setLeads([]);
         }
@@ -26,7 +26,7 @@ const ProspectView = () => {
       });
   }, []);
 
-  // ✅ fetch prospect
+  // ✅ Fetch prospect
   useEffect(() => {
     if (!selectedLeadId) return;
 
@@ -38,13 +38,24 @@ const ProspectView = () => {
       .catch(console.error);
   }, [selectedLeadId]);
 
-  console.log("Leads array:", leads); // 🔍 DEBUG
+ return (
+  <div style={{ padding: "30px", fontFamily: "Arial", background: "#f5f6fa", minHeight: "100vh" }}>
+    
+    <h2 style={{ marginBottom: "20px" }}>📊 Prospect Dashboard</h2>
 
-  return (
-    <div style={{ padding: "20px" }}>
-      <h2>Prospect Details</h2>
+    {/* DROPDOWN CARD */}
+    <div style={{
+      background: "#fff",
+      padding: "20px",
+      borderRadius: "10px",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+      marginBottom: "20px",
+      maxWidth: "400px"
+    }}>
+      <label style={{ fontWeight: "bold", marginBottom: "10px", display: "block" }}>
+        Select Lead
+      </label>
 
-      {/* ✅ DROPDOWN */}
       <select
         value={selectedLeadId}
         onChange={(e) => {
@@ -52,55 +63,120 @@ const ProspectView = () => {
           setData(null);
         }}
         style={{
-          marginBottom: "20px",
-          padding: "8px",
-          width: "300px",
+          width: "100%",
+          padding: "10px",
+          borderRadius: "6px",
+          border: "1px solid #ccc"
         }}
       >
         <option value="">Select Lead</option>
 
-        {leads.length === 0 && (
-          <option disabled>No leads found</option>
-        )}
-
-        {/* 🔥 FIXED MAPPING */}
         {leads.map((lead, index) => {
-          const id =
-            lead._id?.$oid ||   // if Mongo raw
-            lead._id ||         // normal case
-            lead.id ||          // fallback
-            lead.lead_id;       // fallback
+          const id = lead._id?.$oid || lead._id || lead.id;
 
           return (
             <option key={id || index} value={id}>
-              {lead.name || lead.phone || id}
+              {lead.name
+                ? `${lead.name} (${lead.phone || ""})`
+                : lead.phone || `Lead ${index + 1}`}
             </option>
           );
         })}
       </select>
-
-      {/* STATES */}
-      {!selectedLeadId && <div>Please select a lead</div>}
-      {selectedLeadId && !data && <div>Loading Prospect...</div>}
-
-      {/* DATA */}
-      {data && (
-        <>
-          <h3>Current Lead</h3>
-          <pre>{JSON.stringify(data.current_lead, null, 2)}</pre>
-
-          <h3>Past Leads</h3>
-          <pre>{JSON.stringify(data.past_leads, null, 2)}</pre>
-
-          <h3>Visits</h3>
-          <pre>{JSON.stringify(data.visits, null, 2)}</pre>
-
-          <h3>Tasks</h3>
-          <pre>{JSON.stringify(data.tasks, null, 2)}</pre>
-        </>
-      )}
     </div>
-  );
+
+    {/* STATES */}
+    {!selectedLeadId && <p style={{ color: "#777" }}>Please select a lead</p>}
+    {selectedLeadId && !data && <p>Loading Prospect...</p>}
+
+    {/* MAIN GRID */}
+    {data && (
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: "20px"
+      }}>
+
+        {/* CURRENT LEAD */}
+        <div style={{
+          background: "#fff",
+          padding: "20px",
+          borderRadius: "10px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
+        }}>
+          <h3>👤 Current Lead</h3>
+
+          <p><b>Name:</b> {data.prospect?.name}</p>
+          <p><b>Phone:</b> {data.prospect?.phone}</p>
+          <p><b>Budget:</b> ₹{data.current_lead?.budget}</p>
+          <p><b>Location:</b> {data.current_lead?.location}</p>
+          <p><b>Stage:</b> {data.current_lead?.stage}</p>
+          <p><b>BHK:</b> {data.current_lead?.bhk}</p>
+          <p><b>Possession:</b> {data.current_lead?.possession}</p>
+        </div>
+
+        {/* PAST LEADS */}
+        <div style={{
+          background: "#fff",
+          padding: "20px",
+          borderRadius: "10px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
+        }}>
+          <h3>📜 Past Leads</h3>
+
+          {data.past_leads?.length === 0 ? (
+            <p>No past leads</p>
+          ) : (
+            data.past_leads.map((lead, i) => (
+              <div key={i} style={{ marginBottom: "10px" }}>
+                ₹{lead.budget} — {lead.location}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* VISITS */}
+        <div style={{
+          background: "#fff",
+          padding: "20px",
+          borderRadius: "10px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
+        }}>
+          <h3>📅 Visits</h3>
+
+          {data.visits?.length === 0 ? (
+            <p>No visits</p>
+          ) : (
+            data.visits.map((v, i) => (
+              <div key={i}>
+                {v.visit_date || "No date"}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* TASKS */}
+        <div style={{
+          background: "#fff",
+          padding: "20px",
+          borderRadius: "10px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
+        }}>
+          <h3>📝 Tasks</h3>
+
+          {data.tasks?.length === 0 ? (
+            <p>No tasks</p>
+          ) : (
+            data.tasks.map((t, i) => (
+              <div key={i}>{t.title || "Task"}</div>
+            ))
+          )}
+        </div>
+
+      </div>
+    )}
+  </div>
+);
 };
 
 export default ProspectView;
