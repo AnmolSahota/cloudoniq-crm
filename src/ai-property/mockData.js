@@ -2,14 +2,22 @@
 // Central mock data store for the entire CRM system
 
 export const bhkOptions = [
-  "Studio",
   "1 BHK",
   "2 BHK",
   "3 BHK",
   "4 BHK",
   "5 BHK",
+  "Studio",
   "Duplex",
   "Simplex",
+];
+
+export const PROPERTY_TYPES = [
+  { value: "Residential", label: "Residential" },
+  { value: "Shop", label: "Shop" },
+  { value: "Office", label: "Office" },
+  { value: "Plot", label: "Plot" },
+  { value: "Agri", label: "Agricultural" },
 ];
 
 /* ─── PLANS ──────────────────────────────────────────────────────────────────── */
@@ -73,6 +81,57 @@ export const PLAN_CONFIG = {
   },
 };
 
+export const AMENITIES_BY_TYPE = {
+  Residential: [
+    "Swimming Pool",
+    "Gym",
+    "Garden",
+    "Clubhouse",
+    "Park",
+    "Sports Court",
+    "Cricket Turf",
+    "Kids Play Area",
+    "Temple Garden",
+    "Indoor Games",
+    "Yoga Deck",
+    "Spa",
+    "Yoga Center",
+    "Meditation Area",
+    "Security",
+    "Power Backup",
+    "Parking",
+    "Elevator",
+  ],
+  Shop: [
+    "Parking",
+    "Power Backup",
+    "Elevator",
+    "Security",
+    "CCTV",
+    "Fire Safety",
+    "24x7 Water Supply",
+  ],
+  Office: [
+    "Parking",
+    "Power Backup",
+    "Elevator",
+    "Security",
+    "CCTV",
+    "Fire Safety",
+    "Cafeteria",
+    "Conference Room",
+    "24x7 Water Supply",
+  ],
+  Plot: [
+    "Security",
+    "Power Backup",
+    "Parking",
+    "Gated Community",
+    "CCTV",
+    "24x7 Water Supply",
+  ],
+  Agri: ["Water Supply", "Road Access", "Electricity", "Fencing", "Bore Well"],
+};
 /* ─── LEAD STAGES ────────────────────────────────────────────────────────────── */
 // Replace existing LEAD_STAGES with this
 export const LEAD_STAGES = [
