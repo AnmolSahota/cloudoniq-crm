@@ -136,14 +136,14 @@ const ProspectView = () => {
         <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
           <thead>
             <tr>
-              {[["Name","25%"],["Phone","17%"],["BHK","12%"],["Location","18%"],["Budget","14%"],["Stage","14%"]].map(([h,w]) => (
+              {[["Name","50%"],["Phone","50%"]].map(([h,w]) => (
                 <th key={h} style={{ ...styles.th, width: w }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={6} style={{ ...styles.td, textAlign: "center", color: "#bbb", padding: "2rem" }}>No results</td></tr>
+              <tr><td colSpan={2} style={{ ...styles.td, textAlign: "center", color: "#bbb", padding: "2rem" }}>No results</td></tr>
             ) : filtered.map((lead, i) => {
               const id = lead._id?.$oid || lead._id || lead.id;
               const isSelected = selectedId === id;
@@ -162,14 +162,6 @@ const ProspectView = () => {
                     </div>
                   </td>
                   <td style={styles.td}>{lead.phone || "—"}</td>
-                  <td style={styles.td}>{lead.current_lead?.bhk || "—"}</td>
-                  <td style={styles.td}>{lead.current_lead?.location || "—"}</td>
-                  <td style={styles.td}>{lead.current_lead?.budget ? `₹${lead.current_lead.budget}` : "—"}</td>
-                  <td style={styles.td}>
-                    {lead.current_lead?.stage
-                      ? <span style={styles.badge(stageStyle(lead.current_lead.stage))}>{lead.current_lead.stage}</span>
-                      : "—"}
-                  </td>
                 </tr>
               );
             })}
